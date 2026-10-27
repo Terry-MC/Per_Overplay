@@ -9,15 +9,15 @@ struct VendorCardModel {
     var errorText: String?
 }
 
-struct OverlayModel {
+struct OverplayModel {
     var title = "API 额度"
     var subtitle = ""
     var notices: [String] = []
     var cards: [VendorCardModel] = []
 }
 
-final class OverlayView: NSView {
-    var model = OverlayModel() {
+final class OverplayView: NSView {
+    var model = OverplayModel() {
         didSet { needsDisplay = true }
     }
 
@@ -269,7 +269,7 @@ final class OverlayView: NSView {
     }
 }
 
-final class OverlayPanel: NSPanel {
+final class OverplayPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
@@ -291,6 +291,6 @@ final class OverlayPanel: NSPanel {
         becomesKeyOnlyIfNeeded = true
         animationBehavior = .none
         isReleasedWhenClosed = false
-        title = "DSOverlay"
+        title = "DSOverplay"
     }
 }

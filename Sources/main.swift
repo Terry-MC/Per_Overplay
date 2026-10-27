@@ -4,8 +4,8 @@ final class AppController: NSObject, NSWindowDelegate, NSMenuDelegate {
     private let configURL: URL
     private let poller = Poller()
     private let stateStore: StateStore
-    private let panel = OverlayPanel()
-    private let overlayView = OverlayView()
+    private let panel = OverplayPanel()
+    private let overplayView = OverplayView()
     private let snapshotPath: String?
     private let snapshotDelay: TimeInterval
 
@@ -30,7 +30,7 @@ final class AppController: NSObject, NSWindowDelegate, NSMenuDelegate {
         stateStore = StateStore(url: stateURL)
         super.init()
         panel.delegate = self
-        panel.contentView = overlayView
+        panel.contentView = overplayView
         setupStatusItem()
     }
 
@@ -45,9 +45,9 @@ final class AppController: NSObject, NSWindowDelegate, NSMenuDelegate {
         let saved = stateStore.load()
         let width = min(max(CGFloat(saved.width ?? 340), 240), 720)
         let opacity = min(max(CGFloat(saved.opacity ?? 0.9), 0.3), 1)
-        overlayView.model = buildModel(now: Date())
-        overlayView.frame = NSRect(x: 0, y: 0, width: width, height: 120)
-        let height = overlayView.contentHeight(forWidth: width)
+        overplayView.model = buildModel(now: Date())
+        overplayView.frame = NSRect(x: 0, y: 0, width: width, height: 120)
+        let height = overplayView.contentHeight(forWidth: width)
         let topLeft = initialTopLeft(state: saved, width: width, height: height)
 
         panel.alphaValue = opacity
@@ -57,18 +57,18 @@ final class AppController: NSObject, NSWindowDelegate, NSMenuDelegate {
             display: false
         )
         isProgrammaticFrame = false
-        overlayView.frame = NSRect(x: 0, y: 0, width: width, height: height)
+        overplayView.frame = NSRect(x: 0, y: 0, width: width, height: height)
         panel.orderFrontRegardless()
         startTimer()
         refreshUI()
         updateStatusIcon()
-        OverlayLog.info("started: \(poller.runtimes.count) vendor(s), config=\(configURL.path)")
+        OverplayLog.info("started: \(poller.runtimes.count) vendor(s), config=\(configURL.path)")
         if panel.isVisible {
-            OverlayLog.info(
+            OverplayLog.info(
                 "panel frame=\(panel.frame) alpha=\(panel.alphaValue) screen=\(panel.screen?.visibleFrame ?? .zero)"
             )
         } else {
-            OverlayLog.info("panel is not visible")
+            OverplayLog.info("panel is not visible")
         }
         if snapshotPath != nil {
             DispatchQueue.main.asyncAfter(deadline: .now() + snapshotDelay) { [weak self] in
@@ -80,24 +80,24 @@ final class AppController: NSObject, NSWindowDelegate, NSMenuDelegate {
     private func writeSnapshot() {
         guard let snapshotPath else { return }
         refreshUI()
-        guard let representation = overlayView.bitmapImageRepForCachingDisplay(in: overlayView.bounds) else {
-            OverlayLog.info("snapshot failed: no bitmap")
+        guard let representation = overplayView.bitmapImageRepForCachingDisplay(in: overplayView.bounds) else {
+            OverplayLog.info("snapshot failed: no bitmap")
             NSApp.terminate(nil)
             return
         }
-        overlayView.cacheDisplay(in: overlayView.bounds, to: representation)
+        overplayView.cacheDisplay(in: overplayView.bounds, to: representation)
         guard let data = representation.representation(using: .png, properties: [:]) else {
-            OverlayLog.info("snapshot failed: no png data")
+            OverplayLog.info("snapshot failed: no png data")
             NSApp.terminate(nil)
             return
         }
         do {
             try data.write(to: URL(fileURLWithPath: snapshotPath))
-            OverlayLog.info(
-                "snapshot written: \(snapshotPath) \(Int(overlayView.bounds.width))x\(Int(overlayView.bounds.height))"
+            OverplayLog.info(
+                "snapshot written: \(snapshotPath) \(Int(overplayView.bounds.width))x\(Int(overplayView.bounds.height))"
             )
         } catch {
-            OverlayLog.info("snapshot write failed: \(error.localizedDescription)")
+            OverplayLog.info("snapshot write failed: \(error.localizedDescription)")
         }
         NSApp.terminate(nil)
     }
@@ -137,7 +137,7 @@ final class AppController: NSObject, NSWindowDelegate, NSMenuDelegate {
             return
         }
         do {
-            let config = try JSONDecoder().decode(OverlayConfig.self, from: data)
+            let config = try JSONDecoder().decode(OverplayConfig.self, from: data)
             if let validation = ConfigValidation.validate(config) {
                 configError = validation
                 return
@@ -151,9 +151,9 @@ final class AppController: NSObject, NSWindowDelegate, NSMenuDelegate {
 
     private func refreshUI() {
         let model = buildModel(now: Date())
-        overlayView.model = model
+        overplayView.model = model
         let width = panel.frame.width
-        let height = overlayView.contentHeight(forWidth: width)
+        let height = overplayView.contentHeight(forWidth: width)
         if abs(panel.frame.height - height) > 0.5 {
             var frame = panel.frame
             let top = frame.maxY
@@ -164,11 +164,11 @@ final class AppController: NSObject, NSWindowDelegate, NSMenuDelegate {
             isProgrammaticFrame = false
             clampToScreen()
         }
-        overlayView.frame = NSRect(x: 0, y: 0, width: width, height: panel.frame.height)
-        overlayView.needsDisplay = true
+        overplayView.frame = NSRect(x: 0, y: 0, width: width, height: panel.frame.height)
+        overplayView.needsDisplay = true
     }
 
-    private func buildModel(now: Date) -> OverlayModel {
+    private func buildModel(now: Date) -> OverplayModel {
         var notices: [String] = []
         if let configError {
             notices.append("配置：\(configError)")
@@ -187,7 +187,7 @@ final class AppController: NSObject, NSWindowDelegate, NSMenuDelegate {
         } else {
             subtitle = "\(poller.runtimes.count) 个厂商 · \(timeFormatter.string(from: now))"
         }
-        return OverlayModel(title: "API 额度", subtitle: subtitle, notices: notices, cards: cards)
+        return OverplayModel(title: "API 额度", subtitle: subtitle, notices: notices, cards: cards)
     }
 
     private func buildCard(_ runtime: VendorRuntime, now: Date) -> VendorCardModel {
@@ -325,13 +325,13 @@ final class AppController: NSObject, NSWindowDelegate, NSMenuDelegate {
 
     private func updateStatusIcon() {
         let symbol = panel.ignoresMouseEvents ? "eye.slash" : "speedometer"
-        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: "DSOverlay")
+        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: "DSOverplay")
         image?.isTemplate = true
         statusItem?.button?.image = image
         statusItem?.button?.title = image == nil ? "API" : ""
         statusItem?.button?.toolTip = panel.ignoresMouseEvents
-            ? "DSOverlay（点击穿透已开启）"
-            : "DSOverlay"
+            ? "DSOverplay（点击穿透已开启）"
+            : "DSOverplay"
     }
 
     private func scheduleStateSave() {
@@ -410,7 +410,7 @@ final class AppController: NSObject, NSWindowDelegate, NSMenuDelegate {
         status.isEnabled = false
         menu.addItem(status)
         menu.addItem(.separator())
-        menu.addItem(makeMenuItem("退出 DSOverlay", action: #selector(quit(_:))))
+        menu.addItem(makeMenuItem("退出 DSOverplay", action: #selector(quit(_:))))
     }
 
     private func makeMenuItem(
@@ -430,12 +430,12 @@ final class AppController: NSObject, NSWindowDelegate, NSMenuDelegate {
         if panel.isVisible {
             panel.orderOut(nil)
             poller.setPaused(poller.settings.pauseWhenHidden)
-            OverlayLog.info("panel hidden")
+            OverplayLog.info("panel hidden")
         } else {
             refreshUI()
             panel.orderFrontRegardless()
             poller.setPaused(false)
-            OverlayLog.info("panel shown")
+            OverplayLog.info("panel shown")
         }
     }
 
@@ -453,13 +453,13 @@ final class AppController: NSObject, NSWindowDelegate, NSMenuDelegate {
         let width = CGFloat(sender.tag)
         var frame = panel.frame
         let top = frame.maxY
-        let height = overlayView.contentHeight(forWidth: width)
+        let height = overplayView.contentHeight(forWidth: width)
         frame.size = CGSize(width: width, height: height)
         frame.origin.y = top - height
         isProgrammaticFrame = true
         panel.setFrame(frame, display: true)
         isProgrammaticFrame = false
-        overlayView.frame = NSRect(x: 0, y: 0, width: width, height: height)
+        overplayView.frame = NSRect(x: 0, y: 0, width: width, height: height)
         clampToScreen()
         refreshUI()
         scheduleStateSave()

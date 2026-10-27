@@ -1,5 +1,5 @@
 {
-  "_note": "DSOverlay 配置。修改后约 1 秒内自动生效。intervalSeconds 为轮询间隔（秒，默认 300）；fields 的 path 支持 a.b[0].c 和 [键.名] 形式。API Key 仅保存在本机，请保持文件权限 600。",
+  "_note": "DSOverplay 配置。修改后约 1 秒内自动生效。intervalSeconds 为轮询间隔（秒，默认 300）；fields 的 path 支持 a.b[0].c 和 [键.名] 形式。API Key 仅保存在本机，请保持文件权限 600。",
   "version": 1,
   "settings": {
     "pauseWhenHidden": true,

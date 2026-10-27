@@ -5,7 +5,7 @@ struct FieldDisplay {
     let value: String
 }
 
-enum OverlayLog {
+enum OverplayLog {
     private static let formatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -104,7 +104,7 @@ final class Poller {
         session = URLSession(configuration: configuration)
     }
 
-    func apply(config: OverlayConfig, now: Date = Date()) {
+    func apply(config: OverplayConfig, now: Date = Date()) {
         settings = ResolvedSettings(config.settings)
         let enabled = (config.vendors ?? []).filter { $0.isEnabled }
         var oldByID: [String: VendorRuntime] = [:]
@@ -141,17 +141,17 @@ final class Poller {
             runtime.cancel()
         }
         runtimes = next
-        OverlayLog.info("config loaded: \(runtimes.count) enabled vendor(s)")
+        OverplayLog.info("config loaded: \(runtimes.count) enabled vendor(s)")
     }
 
     func setPaused(_ paused: Bool, now: Date = Date()) {
         guard paused != isPaused else { return }
         isPaused = paused
         guard !paused else {
-            OverlayLog.info("polling paused")
+            OverplayLog.info("polling paused")
             return
         }
-        OverlayLog.info("polling resumed")
+        OverplayLog.info("polling resumed")
         for (index, runtime) in runtimes.enumerated() where !runtime.inFlight {
             runtime.nextDue = now.addingTimeInterval(Double(index) * settings.staggerSeconds)
         }
@@ -261,7 +261,7 @@ final class Poller {
             }
             runtime.error = describe(error)
             scheduleFailure(runtime, now: now, retryAfter: nil)
-            OverlayLog.info("\(runtime.id): network error, attempt \(runtime.failureCount)")
+            OverplayLog.info("\(runtime.id): network error, attempt \(runtime.failureCount)")
             return
         }
 
@@ -280,14 +280,14 @@ final class Poller {
                 ? "HTTP \(http.statusCode)"
                 : "HTTP \(http.statusCode)：\(snippet)"
             scheduleFailure(runtime, now: now, retryAfter: retryAfter)
-            OverlayLog.info("\(runtime.id): HTTP \(http.statusCode), attempt \(runtime.failureCount)")
+            OverplayLog.info("\(runtime.id): HTTP \(http.statusCode), attempt \(runtime.failureCount)")
             return
         }
 
         guard let data, !data.isEmpty else {
             runtime.error = "空响应"
             scheduleFailure(runtime, now: now, retryAfter: retryAfter)
-            OverlayLog.info("\(runtime.id): empty response")
+            OverplayLog.info("\(runtime.id): empty response")
             return
         }
 
@@ -299,11 +299,11 @@ final class Poller {
             runtime.error = nil
             runtime.failureCount = 0
             runtime.nextDue = now.addingTimeInterval(runtime.interval)
-            OverlayLog.info("\(runtime.id): HTTP \(http.statusCode) ok")
+            OverplayLog.info("\(runtime.id): HTTP \(http.statusCode) ok")
         } catch {
             runtime.error = "响应不是合法 JSON（HTTP \(http.statusCode)）"
             scheduleFailure(runtime, now: now, retryAfter: retryAfter)
-            OverlayLog.info("\(runtime.id): invalid JSON, attempt \(runtime.failureCount)")
+            OverplayLog.info("\(runtime.id): invalid JSON, attempt \(runtime.failureCount)")
         }
     }
 

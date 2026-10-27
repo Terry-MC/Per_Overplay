@@ -5,15 +5,15 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>zh_CN</string>
     <key>CFBundleDisplayName</key>
-    <string>DS Overlay</string>
+    <string>DS Overplay</string>
     <key>CFBundleExecutable</key>
-    <string>DSOverlay</string>
+    <string>DSOverplay</string>
     <key>CFBundleIdentifier</key>
-    <string>local.ds.overlay</string>
+    <string>local.ds.overplay</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>DSOverlay</string>
+    <string>DSOverplay</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

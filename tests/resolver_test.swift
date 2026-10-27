@@ -64,7 +64,7 @@ struct ResolverTests {
 
         let template = ConfigStore.templateJSON
         do {
-            let decoded = try JSONDecoder().decode(OverlayConfig.self, from: Data(template.utf8))
+            let decoded = try JSONDecoder().decode(OverplayConfig.self, from: Data(template.utf8))
             expect(decoded.vendors?.count == 3, "template decodes three vendors")
             expect(ConfigValidation.validate(decoded) == nil, "template validates")
         } catch {

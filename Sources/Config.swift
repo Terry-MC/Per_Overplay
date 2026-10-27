@@ -1,6 +1,6 @@
 import Foundation
 
-struct OverlayConfig: Codable {
+struct OverplayConfig: Codable {
     var version: Int?
     var settings: SettingsConfig?
     var vendors: [VendorConfig]?
@@ -66,7 +66,7 @@ struct ResolvedSettings {
 enum ConfigStore {
     static var defaultDirectory: URL {
         FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config/ds-overlay", isDirectory: true)
+            .appendingPathComponent(".config/ds-overplay", isDirectory: true)
     }
 
     static var defaultConfigURL: URL {
@@ -93,9 +93,9 @@ enum ConfigStore {
         try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 
-    static func load(from url: URL) throws -> OverlayConfig {
+    static func load(from url: URL) throws -> OverplayConfig {
         let data = try Data(contentsOf: url)
-        return try JSONDecoder().decode(OverlayConfig.self, from: data)
+        return try JSONDecoder().decode(OverplayConfig.self, from: data)
     }
 
     static func permissionWarning(for configURL: URL) -> String? {
@@ -129,7 +129,7 @@ enum ConfigStore {
 
     static let templateJSON = #"""
     {
-      "_note": "DSOverlay 配置。修改后约 1 秒内自动生效。intervalSeconds 为轮询间隔（秒，默认 300）；fields 的 path 支持 a.b[0].c 和 [键.名] 形式。API Key 仅保存在本机，请保持文件权限 600。",
+      "_note": "DSOverplay 配置。修改后约 1 秒内自动生效。intervalSeconds 为轮询间隔（秒，默认 300）；fields 的 path 支持 a.b[0].c 和 [键.名] 形式。API Key 仅保存在本机，请保持文件权限 600。",
       "version": 1,
       "settings": {
         "pauseWhenHidden": true,
@@ -189,7 +189,7 @@ enum ConfigStore {
 }
 
 enum ConfigValidation {
-    static func validate(_ config: OverlayConfig) -> String? {
+    static func validate(_ config: OverplayConfig) -> String? {
         var seen = Set<String>()
         for vendor in config.vendors ?? [] {
             let id = vendor.id.trimmingCharacters(in: .whitespacesAndNewlines)
