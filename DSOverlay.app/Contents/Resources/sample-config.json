@@ -1,0 +1,57 @@
+{
+  "_note": "DSOverlay 配置。修改后约 1 秒内自动生效。intervalSeconds 为轮询间隔（秒，默认 300）；fields 的 path 支持 a.b[0].c 和 [键.名] 形式。API Key 仅保存在本机，请保持文件权限 600。",
+  "version": 1,
+  "settings": {
+    "pauseWhenHidden": true,
+    "staggerSeconds": 0.5,
+    "requestTimeoutSeconds": 15,
+    "backoff": { "baseSeconds": 10, "maxSeconds": 600 }
+  },
+  "vendors": [
+    {
+      "_note": "示例端点，接入前请核对厂商官方文档。把 enabled 改为 true 并填写 apiKey 后才会查询。",
+      "id": "deepseek",
+      "name": "DeepSeek",
+      "enabled": false,
+      "method": "GET",
+      "url": "https://api.deepseek.com/user/balance",
+      "apiKey": "",
+      "headers": { "Authorization": "Bearer ${apiKey}" },
+      "intervalSeconds": 300,
+      "fields": [
+        { "label": "余额", "path": "balance_infos[0].total_balance", "prefix": "¥" },
+        { "label": "币种", "path": "balance_infos[0].currency" },
+        { "label": "可用", "path": "is_available" }
+      ]
+    },
+    {
+      "_note": "Kimi / Moonshot 余额示例，端点以官方文档为准。",
+      "id": "kimi",
+      "name": "Kimi",
+      "enabled": false,
+      "url": "https://api.moonshot.cn/v1/users/me/balance",
+      "apiKey": "",
+      "headers": { "Authorization": "Bearer ${apiKey}" },
+      "intervalSeconds": 600,
+      "fields": [
+        { "label": "可用余额", "path": "data.available_balance", "prefix": "¥" },
+        { "label": "代金券", "path": "data.voucher_balance", "prefix": "¥" },
+        { "label": "现金", "path": "data.cash_balance", "prefix": "¥" }
+      ]
+    },
+    {
+      "_note": "OpenRouter credits 示例，端点以官方文档为准。",
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "enabled": false,
+      "url": "https://openrouter.ai/api/v1/credits",
+      "apiKey": "",
+      "headers": { "Authorization": "Bearer ${apiKey}" },
+      "intervalSeconds": 300,
+      "fields": [
+        { "label": "credits", "path": "data.total_credits", "prefix": "$" },
+        { "label": "已用", "path": "data.total_usage", "prefix": "$" }
+      ]
+    }
+  ]
+}
