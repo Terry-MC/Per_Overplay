@@ -2,27 +2,21 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP_NAME="DSOverlay"
+APP_NAME="DSOverplay"
 APP_BUNDLE="${APP_NAME}.app"
 MACOS_DIR="${APP_BUNDLE}/Contents/MacOS"
-RESOURCES_DIR="${APP_BUNDLE}/Contents/Resources"
+
+swift build -c release --product OverplayApp
+BIN_DIR="$(swift build -c release --show-bin-path)"
 
 rm -rf "${APP_BUNDLE}"
-mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}"
-
-swiftc \
-  -O \
-  -swift-version 5 \
-  -target arm64-apple-macos14.0 \
-  -framework AppKit \
-  Sources/*.swift \
-  -o "${MACOS_DIR}/${APP_NAME}"
-
+mkdir -p "${MACOS_DIR}"
+cp "${BIN_DIR}/OverplayApp" "${MACOS_DIR}/${APP_NAME}"
 cp Info.plist "${APP_BUNDLE}/Contents/Info.plist"
-cp sample-config.json "${RESOURCES_DIR}/sample-config.json"
+printf 'APPL????' > "${APP_BUNDLE}/Contents/PkgInfo"
 
 plutil -lint "${APP_BUNDLE}/Contents/Info.plist"
-codesign --force --sign - "${APP_BUNDLE}"
+codesign --force --sign - --timestamp=none "${APP_BUNDLE}"
 codesign --verify --strict "${APP_BUNDLE}"
 
 echo "built: $(pwd)/${APP_BUNDLE}"

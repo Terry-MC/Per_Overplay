@@ -5,15 +5,15 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>zh_CN</string>
     <key>CFBundleDisplayName</key>
-    <string>DS Overlay</string>
+    <string>DS Overplay</string>
     <key>CFBundleExecutable</key>
-    <string>DSOverlay</string>
+    <string>DSOverplay</string>
     <key>CFBundleIdentifier</key>
-    <string>local.ds.overlay</string>
+    <string>local.ds.overplay</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>DSOverlay</string>
+    <string>DSOverplay</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -24,29 +24,15 @@
     <string>14.0</string>
     <key>LSMultipleInstancesProhibited</key>
     <true/>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.finance</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2026 Overplay. 仅支持个人学习与本地使用。</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
-    <key>NSAppTransportSecurity</key>
-    <dict>
-        <key>NSAllowsLocalNetworking</key>
-        <true/>
-        <key>NSExceptionDomains</key>
-        <dict>
-            <key>localhost</key>
-            <dict>
-                <key>NSExceptionAllowsInsecureHTTPLoads</key>
-                <true/>
-            </dict>
-            <key>127.0.0.1</key>
-            <dict>
-                <key>NSExceptionAllowsInsecureHTTPLoads</key>
-                <true/>
-            </dict>
-        </dict>
-    </dict>
 </dict>
 </plist>
