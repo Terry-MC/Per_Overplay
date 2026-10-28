@@ -10,8 +10,12 @@ struct OverviewView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            if !model.balanceAccounts.isEmpty {
-                balanceAccountPicker
+            if !model.accounts.isEmpty {
+                platformFilterBar
+                if let platform = model.overviewPlatformFilter,
+                   model.overviewPlatformAccounts.count > 1 {
+                    accountFilterChips(platform: platform)
+                }
             }
             LazyVGrid(columns: metricColumns, alignment: .leading, spacing: 14) {
                 MetricCard(
@@ -60,9 +64,9 @@ struct OverviewView: View {
                     isDemo: model.isDemo,
                     emptyText: "0",
                     status: officialBalanceStatus,
-                    accessory: model.availableBalanceCurrencies.isEmpty
-                        ? nil
-                        : AnyView(officialBalanceCurrencyPicker)
+                    accessory: model.availableBalanceCurrencies.count > 1
+                        ? AnyView(officialBalanceCurrencyPicker)
+                        : nil
                 )
                 MetricCard(
                     title: "本地预算剩余",
@@ -85,11 +89,20 @@ struct OverviewView: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("账户")
+                    Text(model.overviewPlatformFilter.map { "\($0.displayName) 账户" } ?? "账户")
                         .font(.title3.weight(.semibold))
-                    Text("\(model.accounts.count)")
+                    Text("\(model.overviewAccountsToShow.count)")
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                    if let selected = model.selectedOverviewAccount {
+                        Text("仅显示 \(selected.displayName)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if let platform = model.overviewPlatformFilter {
+                        Text("仅显示 \(platform.displayName) 平台")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     Spacer()
                     if !model.accounts.isEmpty {
                         Button {
@@ -100,13 +113,19 @@ struct OverviewView: View {
                         .disabled(model.isDemo)
                     }
                 }
-                ForEach(model.accounts) { account in
-                    AccountCardView(
-                        model: model,
-                        account: account,
-                        onEdit: { onEdit(account) },
-                        onDelete: { onDelete(account) }
-                    )
+                if model.overviewAccountsToShow.isEmpty {
+                    Text("该平台暂无账户。")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(model.overviewAccountsToShow) { account in
+                        AccountCardView(
+                            model: model,
+                            account: account,
+                            onEdit: { onEdit(account) },
+                            onDelete: { onDelete(account) }
+                        )
+                    }
                 }
             }
 
@@ -114,37 +133,116 @@ struct OverviewView: View {
         }
     }
 
-    private var balanceAccountPicker: some View {
-        HStack(spacing: 10) {
-            Label("官方余额账户", systemImage: "creditcard")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Picker("官方余额账户", selection: $model.balanceAccountFilter) {
-                Text("全部 DeepSeek 账户").tag(String?.none)
-                ForEach(model.balanceAccounts) { account in
-                    Text("\(account.displayName) · \(model.currencyLabel(for: account))")
-                        .tag(Optional(account.id))
+    private var platformFilterBar: some View {
+        let presentProviders = ProviderKind.allCases.filter { provider in
+            model.accounts.contains { $0.provider == provider }
+        }
+        return HStack(spacing: 10) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    platformButton(nil, title: "All", symbol: "square.grid.2x2")
+                    ForEach(presentProviders) { provider in
+                        platformButton(for: provider)
+                    }
                 }
             }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .frame(width: 260)
-            if model.selectedBalanceAccount != nil {
-                Text("已选择该账户；币种在卡片内切换")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("全部 DeepSeek 账户；币种在卡片内切换")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(model.overviewPlatformFilter.map { "仅显示 \($0.displayName) 平台" } ?? "全部 AI 平台汇总")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize()
         }
+        .padding(6)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+
+    @ViewBuilder
+    private func platformButton(for provider: ProviderKind) -> some View {
+        switch provider {
+        case .deepseek:
+            platformButton(provider, title: "DeepSeek", letter: "D", color: .blue)
+        case .openrouter:
+            platformButton(provider, title: "OpenRouter", letter: "O", color: .purple)
+        }
+    }
+
+    private func accountFilterChips(platform: ProviderKind) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                accountChip(nil, title: "全部 \(platform.displayName) 账户")
+                ForEach(model.overviewPlatformAccounts) { account in
+                    accountChip(account.id, title: account.displayName)
+                }
+            }
+        }
+    }
+
+    private func accountChip(_ accountId: String?, title: String) -> some View {
+        let selected = model.overviewAccountFilter == accountId
+        return Button {
+            model.overviewAccountFilter = accountId
+        } label: {
+            Text(title)
+                .font(.caption.weight(selected ? .semibold : .regular))
+                .foregroundStyle(selected ? Color.accentColor : .secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule().fill(selected ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08))
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func platformButton(
+        _ platform: ProviderKind?,
+        title: String,
+        symbol: String? = nil,
+        letter: String? = nil,
+        color: Color = .accentColor
+    ) -> some View {
+        let selected = model.overviewPlatformFilter == platform
+        return Button {
+            model.overviewPlatformFilter = platform
+        } label: {
+            HStack(spacing: 6) {
+                if let symbol {
+                    Image(systemName: symbol)
+                        .font(.caption)
+                } else if let letter {
+                    Text(letter)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 16, height: 16)
+                        .background(Circle().fill(color))
+                }
+                Text(title)
+            }
+            .font(.subheadline.weight(selected ? .semibold : .regular))
+            .foregroundStyle(selected ? Color.accentColor : .secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                Capsule().fill(selected ? Color.accentColor.opacity(0.12) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     @ViewBuilder
     private var officialBalanceCurrencyPicker: some View {
-        if !model.availableBalanceCurrencies.isEmpty {
+        if model.availableBalanceCurrencies.count > 1 {
             Picker("币种", selection: $model.balanceCurrencyFilter) {
                 ForEach(model.availableBalanceCurrencies, id: \.self) { code in
                     Text("\(Money.symbol(for: code)) \(code)")
@@ -155,23 +253,51 @@ struct OverviewView: View {
             .labelsHidden()
             .controlSize(.small)
             .fixedSize()
-            .help("切换 DeepSeek 官方余额币种")
+            .help("币种选项来自 DeepSeek /user/balance 实际返回的数据；仅在多个真实币种时显示")
         }
+    }
+
+    private var canSwitchBalanceCurrency: Bool {
+        model.availableBalanceCurrencies.count > 1
     }
 
     private var officialBalanceFootnote: String {
-        if let code = model.balanceCurrencyFilter {
-            return "当前仅显示 \(Money.symbol(for: code)) \(code) 的官方余额；可在卡片内切换币种。"
+        if let selected = model.selectedOverviewAccount, selected.provider == .openrouter {
+            return "所选账户为 OpenRouter，不提供 DeepSeek 官方余额。"
         }
-        return "选择 DeepSeek 账户与币种查看官方余额。"
+        if model.overviewPlatformFilter == .openrouter {
+            return "OpenRouter 平台不提供 DeepSeek 官方余额。"
+        }
+        if let code = model.balanceCurrencyFilter {
+            if model.availableBalanceCurrencies.count > 1 {
+                return "当前仅显示 \(Money.symbol(for: code)) \(code) 的官方余额（来自 /user/balance 实际返回）；可在卡片内切换币种。"
+            }
+            return "当前仅显示 \(Money.symbol(for: code)) \(code) 的官方余额（来自 /user/balance 实际返回）。"
+        }
+        return "选择 DeepSeek 平台或账户查看官方余额；只有实际返回多个币种时才显示币种切换。"
     }
 
     private var officialBalanceStatus: DataStatus {
+        if let selected = model.selectedOverviewAccount {
+            if selected.provider == .openrouter {
+                return .missing("所选账户为 OpenRouter，不提供官方余额；0 仅为占位")
+                    .prefixed("官方余额")
+            }
+            if let code = model.balanceCurrencyFilter, model.officialBalances.isEmpty {
+                return .missing("当前筛选的 \(Money.symbol(for: code)) \(code) 暂无余额数据；0 仅为占位")
+                    .prefixed("官方余额")
+            }
+            return model.balanceDataStatus(for: selected).prefixed("官方余额")
+        }
+        if model.overviewPlatformFilter == .openrouter {
+            return .missing("OpenRouter 平台不提供官方余额；0 仅为占位")
+                .prefixed("官方余额")
+        }
         if let code = model.balanceCurrencyFilter, model.officialBalances.isEmpty {
             return .missing("当前筛选的 \(Money.symbol(for: code)) \(code) 暂无余额数据；0 仅为占位")
                 .prefixed("官方余额")
         }
-        return model.balanceDataStatus(for: model.selectedBalanceAccount).prefixed("官方余额")
+        return model.balanceDataStatus(for: nil).prefixed("官方余额")
     }
 
     private var todayFootnote: String {
@@ -204,7 +330,8 @@ struct OverviewView: View {
 
     private var budgetRemainingLines: [(String, String?)] {
         var totals: [String: Decimal] = [:]
-        for account in model.accounts {
+        let accounts = model.overviewAccountsToShow
+        for account in accounts {
             guard let budget = account.budget,
                   let remaining = model.budgetRemaining(for: account) else { continue }
             totals[budget.currency, default: 0] += remaining

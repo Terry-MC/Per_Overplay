@@ -120,11 +120,14 @@ final class AppModel: ObservableObject {
         didSet { validateUsageFilters() }
     }
     @Published var usageModelFilter: String?
-    @Published var balanceAccountFilter: String? {
+    @Published var overviewPlatformFilter: ProviderKind? {
         didSet {
-            validateBalanceFilter()
+            overviewAccountFilter = nil
             ensureBalanceCurrencyFilter()
         }
+    }
+    @Published var overviewAccountFilter: String? {
+        didSet { ensureBalanceCurrencyFilter() }
     }
     @Published var balanceCurrencyFilter: String?
 
@@ -281,6 +284,12 @@ final class AppModel: ObservableObject {
             let range = CalendarDay.range(preset: .ninety, now: now)
             let ids = Set(loadedAccounts.map(\.id))
             usageRecords = try store.usage(range: range).filter { ids.contains($0.accountId) }
+            if let accountId = overviewAccountFilter,
+               !loadedAccounts.contains(where: {
+                   $0.id == accountId && (overviewPlatformFilter == nil || $0.provider == overviewPlatformFilter)
+               }) {
+                overviewAccountFilter = nil
+            }
             let activeIds = Set(loadedAccounts.map(\.id))
             let previousAlertIds = Set(alerts.map(\.id))
             let loadedAlerts = try store.alerts().filter { activeIds.contains($0.accountId) }
@@ -292,7 +301,6 @@ final class AppModel: ObservableObject {
                 self.selectedCurrency = nil
             }
             validateUsageFilters()
-            validateBalanceFilter()
             ensureBalanceCurrencyFilter()
             showOnboarding = !isDemo && loadedAccounts.isEmpty
             now = Date()
@@ -614,13 +622,6 @@ final class AppModel: ObservableObject {
         return Array(Set(records.map(\.model))).sorted()
     }
 
-    private func validateBalanceFilter() {
-        if let balanceAccountFilter,
-           !balanceAccounts.contains(where: { $0.id == balanceAccountFilter }) {
-            self.balanceAccountFilter = nil
-        }
-    }
-
     private func ensureBalanceCurrencyFilter() {
         let available = availableBalanceCurrencies
         if available.isEmpty {
@@ -674,25 +675,41 @@ final class AppModel: ObservableObject {
         return result
     }
 
+    var overviewUsageRecords: [UsageRecord] {
+        if let selectedOverviewAccount {
+            return usageRecords.filter { $0.accountId == selectedOverviewAccount.id }
+        }
+        guard let overviewPlatformFilter else { return usageRecords }
+        if overviewPlatformFilter == .deepseek { return [] }
+        return usageRecords.filter { $0.provider == overviewPlatformFilter }
+    }
+
     var todayCosts: [String: Decimal] {
         let today = CalendarDay.string(for: now, timeZone: CalendarDay.utc)
-        return costs(usageRecords.filter { $0.day == today })
+        return costs(overviewUsageRecords.filter { $0.day == today })
     }
 
     var monthCosts: [String: Decimal] {
         let (_, range) = CalendarDay.monthRange(now: now)
-        return costs(usageRecords.filter { range.contains($0.day) })
+        return costs(overviewUsageRecords.filter { range.contains($0.day) })
     }
 
     var tokenSummary: (total: Int, totalAccounts: Int, providersWithTokens: Int) {
         let range = CalendarDay.range(preset: .thirty, now: now)
-        let records = usageRecords.filter { range.contains($0.day) }
+        let records = overviewUsageRecords.filter { range.contains($0.day) }
         let total = records.reduce(0) { $0 + ($1.totalTokens ?? 0) }
         let providers = Set(records.filter { $0.totalTokens != nil }.map(\.accountId)).count
-        return (total, accounts.count, providers)
+        let totalAccounts = overviewAccountsToShow.count
+        return (total, totalAccounts, providers)
     }
 
     var officialCreditsRemaining: [String: Decimal] {
+        if let selectedOverviewAccount {
+            guard selectedOverviewAccount.provider == .openrouter,
+                  let quota = quotas[selectedOverviewAccount.id] else { return [:] }
+            return [quota.currency: quota.remaining]
+        }
+        guard overviewPlatformFilter != .deepseek else { return [:] }
         var result: [String: Decimal] = [:]
         for account in accounts where account.enabled && account.provider == .openrouter {
             guard let quota = quotas[account.id] else { continue }
@@ -705,29 +722,44 @@ final class AppModel: ObservableObject {
         accounts.filter { $0.provider == .deepseek }
     }
 
-    var selectedBalanceAccount: Account? {
-        guard let balanceAccountFilter else { return nil }
-        return balanceAccounts.first { $0.id == balanceAccountFilter }
+    var overviewPlatformAccounts: [Account] {
+        guard let overviewPlatformFilter else { return accounts }
+        return accounts.filter { $0.provider == overviewPlatformFilter }
+    }
+
+    var selectedOverviewAccount: Account? {
+        guard let overviewAccountFilter else { return nil }
+        return accounts.first { $0.id == overviewAccountFilter }
+    }
+
+    var overviewAccountsToShow: [Account] {
+        if let selectedOverviewAccount { return [selectedOverviewAccount] }
+        return overviewPlatformAccounts
     }
 
     var availableBalanceCurrencies: [String] {
-        let relevant: [Account]
-        if let selectedBalanceAccount {
-            relevant = [selectedBalanceAccount]
-        } else {
-            relevant = activeDeepSeekAccounts
+        if let selectedOverviewAccount {
+            return selectedOverviewAccount.provider == .deepseek
+                ? balanceCurrencies(for: selectedOverviewAccount)
+                : []
         }
-        let codes = relevant.flatMap { balanceCurrencies(for: $0) }
+        guard overviewPlatformFilter != .openrouter else { return [] }
+        let codes = activeDeepSeekAccounts.flatMap { balanceCurrencies(for: $0) }
         return Array(Set(codes)).sorted()
     }
 
     var officialBalances: [String: Decimal] {
-        let ids: Set<String>
-        if let balanceAccountFilter {
-            ids = [balanceAccountFilter]
-        } else {
-            ids = Set(activeDeepSeekAccounts.map(\.id))
+        if let selectedOverviewAccount {
+            guard selectedOverviewAccount.provider == .deepseek else { return [:] }
+            let totals = BalanceSummary.totalsByCurrency(
+                balances: balances,
+                accountIds: [selectedOverviewAccount.id]
+            )
+            guard let balanceCurrencyFilter else { return [:] }
+            return totals.filter { $0.key == balanceCurrencyFilter }
         }
+        guard overviewPlatformFilter != .openrouter else { return [:] }
+        let ids = Set(activeDeepSeekAccounts.map(\.id))
         let totals = BalanceSummary.totalsByCurrency(balances: balances, accountIds: ids)
         guard let balanceCurrencyFilter else { return [:] }
         return totals.filter { $0.key == balanceCurrencyFilter }
@@ -804,8 +836,28 @@ final class AppModel: ObservableObject {
         return .actual
     }
 
+    private func overviewOpenRouterDataStatus() -> DataStatus {
+        if let selectedOverviewAccount {
+            switch selectedOverviewAccount.provider {
+            case .deepseek:
+                return .missing("所选账户为 DeepSeek，不提供历史费用 / 用量；0 仅为占位")
+            case .openrouter:
+                if let issue = dataIssue(for: selectedOverviewAccount) { return .anomaly(issue) }
+                if !selectedOverviewAccount.enabled { return .missing("该账户已禁用；0 仅为占位") }
+                if selectedOverviewAccount.lastSuccessAt == nil {
+                    return .missing("该账户尚未成功同步；0 仅为占位")
+                }
+                return .actual
+            }
+        }
+        if overviewPlatformFilter == .deepseek {
+            return .missing("DeepSeek 平台不提供历史费用 / 用量；0 仅为占位")
+        }
+        return openRouterDataStatus()
+    }
+
     func costDataStatus(forToday: Bool) -> DataStatus {
-        let base = openRouterDataStatus()
+        let base = overviewOpenRouterDataStatus()
         guard case .actual = base else { return base }
         let values = forToday ? todayCosts : monthCosts
         guard values.isEmpty else { return .actual }
@@ -816,7 +868,7 @@ final class AppModel: ObservableObject {
     }
 
     func tokenDataStatus() -> DataStatus {
-        let base = openRouterDataStatus()
+        let base = overviewOpenRouterDataStatus()
         guard case .actual = base else { return base }
         if tokenSummary.providersWithTokens == 0 {
             return .missing("所选范围没有可用的 token 数据；DeepSeek 官方不提供历史 token，OpenRouter 仅覆盖约 30 个 UTC 日；0 仅为占位")
@@ -825,6 +877,15 @@ final class AppModel: ObservableObject {
     }
 
     func creditDataStatus() -> DataStatus {
+        if let selectedOverviewAccount {
+            if selectedOverviewAccount.provider == .deepseek {
+                return .missing("所选账户为 DeepSeek，不提供 credits；0 仅为占位")
+            }
+            return creditDataStatus(for: selectedOverviewAccount)
+        }
+        if overviewPlatformFilter == .deepseek {
+            return .missing("DeepSeek 平台不提供 credits；0 仅为占位")
+        }
         if openRouterAccounts.isEmpty {
             return .missing("暂无 OpenRouter 账户；0 仅为占位")
         }
@@ -911,7 +972,20 @@ final class AppModel: ObservableObject {
     }
 
     func budgetRemainingDataStatus() -> DataStatus {
-        let budgetAccounts = accounts.filter { $0.budget != nil }
+        let budgetAccounts: [Account]
+        if let selectedOverviewAccount {
+            guard selectedOverviewAccount.budget != nil else {
+                return .missing("所选账户没有本地预算；0 仅为占位")
+            }
+            budgetAccounts = [selectedOverviewAccount]
+        } else {
+            if overviewPlatformFilter == .deepseek {
+                return .missing("DeepSeek 平台没有本地预算；0 仅为占位")
+            }
+            budgetAccounts = accounts.filter {
+                (overviewPlatformFilter == nil || $0.provider == overviewPlatformFilter) && $0.budget != nil
+            }
+        }
         if budgetAccounts.isEmpty {
             return .missing("未设置本地预算；0 仅为占位")
         }
@@ -1256,7 +1330,8 @@ final class AppModel: ObservableObject {
             selectedCurrency = nil
             usageAccountFilter = nil
             usageModelFilter = nil
-            balanceAccountFilter = nil
+            overviewPlatformFilter = nil
+            overviewAccountFilter = nil
             balanceCurrencyFilter = nil
             resetToastState()
             reloadFromStore()
@@ -1279,7 +1354,8 @@ final class AppModel: ObservableObject {
         selectedCurrency = nil
         usageAccountFilter = nil
         usageModelFilter = nil
-        balanceAccountFilter = nil
+        overviewPlatformFilter = nil
+        overviewAccountFilter = nil
         balanceCurrencyFilter = nil
         resetToastState()
         reloadFromStore()
@@ -1316,7 +1392,8 @@ final class AppModel: ObservableObject {
         UserDefaults.standard.removeObject(forKey: Self.demoDisclaimerKey)
         selectedTab = .overview
         selectedCurrency = nil
-        balanceAccountFilter = nil
+        overviewPlatformFilter = nil
+        overviewAccountFilter = nil
         balanceCurrencyFilter = nil
         resetToastState()
         syncingAccountIds.removeAll()
