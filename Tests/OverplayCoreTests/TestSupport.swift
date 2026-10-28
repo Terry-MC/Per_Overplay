@@ -40,6 +40,12 @@ final class FakeHTTPTransport: HTTPTransport {
         self.init([Result<HTTPResponse, HTTPTransportError>]())
     }
 
+    var requestCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return requests.count
+    }
+
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         lock.lock()
         requests.append(request)
