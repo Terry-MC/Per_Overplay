@@ -17,9 +17,6 @@ struct DashboardView: View {
                     .padding(.horizontal, 20)
                     .padding(.vertical, 8)
             }
-            if let banner = model.banner {
-                BannerView(banner: banner) { model.dismissBanner() }
-            }
 
             if model.showOnboarding && !model.isDemo {
                 OnboardingView(model: model) {
@@ -39,6 +36,12 @@ struct DashboardView: View {
         }
         .frame(minWidth: 1080, minHeight: 700)
         .background(Color(nsColor: .windowBackgroundColor))
+        .overlay(alignment: .topTrailing) {
+            ToastStackView(model: model)
+                .padding(.top, model.isDemo ? 150 : 112)
+                .padding(.trailing, 20)
+                .zIndex(10)
+        }
         .sheet(isPresented: $showAddAccount) {
             AccountEditorView(model: model, mode: .add)
         }
@@ -47,6 +50,9 @@ struct DashboardView: View {
         }
         .sheet(item: $deleteAccount) { account in
             DeleteAccountSheet(model: model, account: account)
+        }
+        .sheet(isPresented: $model.showMessageCenter) {
+            MessageCenterView(model: model)
         }
     }
 
@@ -68,6 +74,31 @@ struct DashboardView: View {
             }
             Spacer()
             if !model.showOnboarding || model.isDemo {
+                Button {
+                    model.showMessageCenter = true
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(
+                            systemName: model.unacknowledgedAlertCount > 0
+                                ? "bell.badge.fill"
+                                : "bell"
+                        )
+                        Text("消息")
+                        if model.unacknowledgedAlertCount > 0 {
+                            Text(
+                                model.unacknowledgedAlertCount > 99
+                                    ? "99+"
+                                    : "\(model.unacknowledgedAlertCount)"
+                            )
+                            .font(.caption2.weight(.bold))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(Color.red.opacity(0.16)))
+                            .foregroundStyle(.red)
+                        }
+                    }
+                }
+                .help("打开消息中心")
                 Button {
                     model.refreshAll()
                 } label: {

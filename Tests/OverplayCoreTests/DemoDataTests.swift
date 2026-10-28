@@ -7,7 +7,7 @@ final class DemoDataTests: XCTestCase {
         let store = try DemoData.makeStore(now: now)
         XCTAssertTrue(store.isInMemory)
         let accounts = try store.accounts()
-        XCTAssertEqual(accounts.count, 3)
+        XCTAssertEqual(accounts.count, 16)
         XCTAssertTrue(accounts.allSatisfy(\.isDemo))
         let deepSeekAccounts = accounts.filter { $0.provider == .deepseek }
         XCTAssertEqual(deepSeekAccounts.count, 2)
@@ -23,15 +23,45 @@ final class DemoDataTests: XCTestCase {
         }
         XCTAssertEqual(demoCurrencies, Set(["CNY", "USD"]))
         XCTAssertTrue(accounts.contains { $0.provider == .openrouter })
-
         let usage = try store.usage()
+
+        let demoOnlyProviders: [ProviderKind] = [
+            .kimi, .glm, .minimax, .qwen, .seed, .hunyuan,
+            .openai, .anthropic, .gemini, .meta, .xai, .mistral
+        ]
+        XCTAssertEqual(Set(accounts.map(\.provider)).intersection(demoOnlyProviders),
+                       Set(demoOnlyProviders), "每个演示平台都应至少有一个虚拟账户")
+        XCTAssertEqual(Set(accounts.map(\.provider)).count, 14,
+                       "演示模式应包含 14 个平台")
+        XCTAssertEqual(accounts.filter { $0.provider == .kimi }.count, 2,
+                       "Kimi 需要两个账户以演示同平台账户切换")
+        XCTAssertEqual(ProviderKind.realAccountProviders, [.deepseek, .openrouter])
+        for provider in demoOnlyProviders {
+            XCTAssertFalse(provider.supportsRealConnection,
+                           "\(provider.displayName) 仅提供演示数据，不应当被当作真实连接器")
+            let account = try XCTUnwrap(accounts.first { $0.provider == provider })
+            let quota = try store.latestQuota(accountId: account.id)
+            let snapshot = try XCTUnwrap(quota)
+            XCTAssertEqual(snapshot.currency, provider.defaultCurrency)
+            XCTAssertTrue(usage.contains { $0.provider == provider && $0.accountId == account.id },
+                          "\(provider.displayName) 应有虚拟用量记录")
+        }
+
         XCTAssertFalse(usage.isEmpty)
         XCTAssertTrue(usage.allSatisfy { $0.source.contains("演示") })
         let utcToday = CalendarDay.string(
             for: now, timeZone: CalendarDay.utc, calendar: TestClock.calendar
         )
         XCTAssertFalse(usage.contains { $0.day == utcToday },
-                       "演示数据应模拟 OpenRouter 的真实窗口：不含今天")
+                       "演示数据应模拟完整 UTC 日窗口：不含今天")
+        XCTAssertEqual(Set(usage.map(\.day)).count, 30,
+                       "演示数据必须覆盖 30 个完整 UTC 日")
+        for account in accounts where account.provider.capabilities.usage {
+            let days = Set(usage.filter { $0.accountId == account.id }.map(\.day))
+            XCTAssertEqual(days.count, 30,
+                           "\(account.displayName) 应覆盖 30 个完整 UTC 日")
+            XCTAssertFalse(days.contains(utcToday))
+        }
         XCTAssertTrue(usage.compactMap(\.cost).reduce(Decimal(0), +) > 0)
 
         let alerts = try store.alerts()
