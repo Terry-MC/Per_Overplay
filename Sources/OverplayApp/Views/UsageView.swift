@@ -17,11 +17,11 @@ struct UsageView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             controls
-            summaryCards
             if records.isEmpty {
                 emptyRecordsState
                 missingDataNotes
             } else {
+                summaryCards
                 chartsAndTables
                 missingDataNotes
             }
@@ -39,7 +39,7 @@ struct UsageView: View {
                 title: "所选范围没有用量数据",
                 message: model.hasUsageFilters
                     ? "当前账户 / 模型筛选没有匹配记录。可清除筛选或切换时间范围。"
-                    : "OpenRouter 仅提供最近约 30 个 UTC 日；DeepSeek 官方不提供历史 token / 费用接口。缺失数据以 0? 占位并注明原因，不代表真实零值。"
+                    : "OpenRouter 仅提供最近约 30 个 UTC 日；DeepSeek 官方不提供历史 token / 费用接口。缺失数据不会以 0 补齐。"
             ) {
                 if model.hasUsageFilters {
                     Button("清除筛选") { model.resetUsageFilters() }
@@ -56,7 +56,7 @@ struct UsageView: View {
                 isDemo: model.isDemo
             ) {
                 if costSeries.isEmpty {
-                    emptyChart("没有可绘制的费用数据。图表不绘制占位 0；上方汇总卡以 0? 占位。")
+                    emptyChart("没有可绘制的费用数据。缺失数据不会以 0 补齐。")
                 } else {
                     let allDays = CalendarDay.days(from: model.currentRange)
                     Chart(costSeries) { point in
@@ -89,7 +89,7 @@ struct UsageView: View {
                         }
                     }
                     .frame(height: 230)
-                    Text("来源：OpenRouter 官方 activity（其余厂商未提供费用）。图表保留所选范围的所有日期；无数据日期留空，不绘制 0。")
+                    Text("来源：OpenRouter 官方 activity（其余厂商未提供费用）。图表保留所选范围的所有日期；无数据日期为空，不补 0。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if !costSeries.contains(where: { $0.day == model.currentRange.endDay }) {
@@ -106,7 +106,7 @@ struct UsageView: View {
                 isDemo: model.isDemo
             ) {
                 if tokenSeries.isEmpty {
-                    emptyChart("厂商未提供 token 历史。DeepSeek 无历史用量接口；图表不绘制占位 0，上方汇总卡以 0? 占位。")
+                    emptyChart("厂商未提供 token 历史。DeepSeek 无历史用量接口；缺失数据不显示为 0。")
                 } else {
                     let allDays = CalendarDay.days(from: model.currentRange)
                     Chart {
@@ -184,7 +184,7 @@ struct UsageView: View {
                                 Text(account.displayName)
                                     .font(.caption.weight(.semibold))
                                 if !account.capabilities.usage {
-                                    Text("厂商未提供历史 token / 费用数据。DeepSeek 官方仅提供余额快照；界面不会伪造曲线，汇总卡用 0? 占位并注明原因。")
+                                    Text("厂商未提供历史 token / 费用数据。DeepSeek 官方仅提供余额快照，界面不会以 0 或伪造曲线替代。")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 } else {
@@ -272,7 +272,7 @@ struct UsageView: View {
         }
         .overlay(alignment: .bottomLeading) {
             if model.selectedPreset == .ninety {
-                Text("OpenRouter 仅提供最近约 30 个 UTC 日，超出窗口的日期不会显示，也不会绘制 0；汇总卡用 0? 占位。")
+                Text("OpenRouter 仅提供最近约 30 个 UTC 日，超出窗口的日期不会显示，也不会补 0。")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .offset(y: 16)
@@ -295,16 +295,6 @@ struct UsageView: View {
             ? [] : [(Money.formatInteger(tokenCounts.reduce(0, +)), "tokens")]
         let requestLines: [(String, String?)] = requestCounts.isEmpty
             ? [] : [(Money.formatInteger(requestCounts.reduce(0, +)), "次")]
-        let baseStatus = model.usageDataStatus()
-        let costStatus: DataStatus = (costLines.isEmpty
-            ? (records.isEmpty ? baseStatus : .missing("当前记录的厂商未提供费用字段；0 仅为占位"))
-            : baseStatus).prefixed("筛选范围内费用")
-        let tokenStatus: DataStatus = (tokenLines.isEmpty
-            ? (records.isEmpty ? baseStatus : .missing("当前记录的厂商未提供 token 字段；0 仅为占位"))
-            : baseStatus).prefixed("tokens")
-        let requestStatus: DataStatus = (requestLines.isEmpty
-            ? (records.isEmpty ? baseStatus : .missing("当前记录的厂商未提供请求数字段；0 仅为占位"))
-            : baseStatus).prefixed("请求数")
 
         return LazyVGrid(
             columns: [GridItem(.adaptive(minimum: 210), spacing: 14)],
@@ -314,37 +304,30 @@ struct UsageView: View {
             MetricCard(
                 title: "筛选范围内费用",
                 valueLines: costLines,
-                footnote: costStatus.isMissing ? "0 为占位；悬浮 ? 查看原因。" : "按当前币种筛选；分币种展示，不合并。",
+                footnote: "按当前币种筛选；分币种展示，不合并。",
                 symbol: "dollarsign.circle",
-                isDemo: model.isDemo,
-                emptyText: "0",
-                status: costStatus
+                isDemo: model.isDemo
             )
             MetricCard(
                 title: "tokens",
                 valueLines: tokenLines,
-                footnote: tokenStatus.isMissing ? "0 为占位；悬浮 ? 查看原因。" : "仅统计提供实际字段的记录。",
+                footnote: "仅统计提供实际字段的记录；缺失不补 0。",
                 symbol: "number",
-                isDemo: model.isDemo,
-                emptyText: "0",
-                status: tokenStatus
+                isDemo: model.isDemo
             )
             MetricCard(
                 title: "请求数",
                 valueLines: requestLines,
-                footnote: requestStatus.isMissing ? "0 为占位；悬浮 ? 查看原因。" : "厂商提供时展示。",
+                footnote: "厂商提供时展示，否则标记未提供。",
                 symbol: "arrow.left.arrow.right",
-                isDemo: model.isDemo,
-                emptyText: "0",
-                status: requestStatus
+                isDemo: model.isDemo
             )
             MetricCard(
                 title: "数据记录",
                 valueLines: [(String(records.count), "条")],
                 footnote: "按账户 / 日期 / 模型 / 供应商去重后存储。",
                 symbol: "list.bullet.rectangle",
-                isDemo: model.isDemo,
-                status: baseStatus.prefixed("数据记录")
+                isDemo: model.isDemo
             )
         }
     }

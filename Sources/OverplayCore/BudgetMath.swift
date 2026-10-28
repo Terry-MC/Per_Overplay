@@ -22,7 +22,7 @@ public enum BudgetMath {
         records: [UsageRecord],
         range: DayRange
     ) -> Decimal? {
-        guard account.provider.capabilities.usage,
+        guard account.provider == .openrouter,
               account.enabled,
               !account.credentialInvalid,
               account.lastError == nil,

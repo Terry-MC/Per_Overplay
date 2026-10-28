@@ -90,7 +90,7 @@ public final class AlertEngine {
     }
 
     private func evaluateBudget(_ snapshot: AlertSnapshot) throws -> [AlertEvent] {
-        guard snapshot.provider.capabilities.usage,
+        guard snapshot.provider == .openrouter,
               let budget = snapshot.budget,
               budget.amount > 0,
               let spend = snapshot.monthSpend,

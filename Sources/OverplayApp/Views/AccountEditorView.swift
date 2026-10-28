@@ -67,7 +67,7 @@ struct AccountEditorView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("厂商").font(.headline)
                             Picker("厂商", selection: $provider) {
-                                ForEach(ProviderKind.realAccountProviders) { provider in
+                                ForEach(ProviderKind.allCases) { provider in
                                     Text(provider.displayName).tag(provider)
                                 }
                             }
@@ -189,12 +189,6 @@ struct AccountEditorView: View {
                         destination: URL(string: "https://openrouter.ai/docs/api-reference/credits/get-credits")!
                     )
                     .font(.caption)
-                default:
-                    Label("演示平台", systemImage: "info.circle")
-                        .font(.headline)
-                    Text("该平台目前仅用于演示虚拟数据，未接入真实连接器，不能在真实模式添加账户。")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
                 }
             }
         }

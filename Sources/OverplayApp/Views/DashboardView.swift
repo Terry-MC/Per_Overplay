@@ -17,6 +17,9 @@ struct DashboardView: View {
                     .padding(.horizontal, 20)
                     .padding(.vertical, 8)
             }
+            if let banner = model.banner {
+                BannerView(banner: banner) { model.dismissBanner() }
+            }
 
             if model.showOnboarding && !model.isDemo {
                 OnboardingView(model: model) {
@@ -36,12 +39,6 @@ struct DashboardView: View {
         }
         .frame(minWidth: 1080, minHeight: 700)
         .background(Color(nsColor: .windowBackgroundColor))
-        .overlay(alignment: .topTrailing) {
-            ToastStackView(model: model)
-                .padding(.top, model.isDemo ? 150 : 112)
-                .padding(.trailing, 20)
-                .zIndex(10)
-        }
         .sheet(isPresented: $showAddAccount) {
             AccountEditorView(model: model, mode: .add)
         }
@@ -115,18 +112,6 @@ struct DashboardView: View {
                     HStack(spacing: 6) {
                         Image(systemName: tab.symbol)
                         Text(tab.title)
-                        if tab == .messages, !model.unacknowledgedAlerts.isEmpty {
-                            Text(
-                                model.unacknowledgedAlerts.count > 99
-                                    ? "99+"
-                                    : "\(model.unacknowledgedAlerts.count)"
-                            )
-                            .font(.caption2.weight(.bold))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(Capsule().fill(Color.red.opacity(0.16)))
-                            .foregroundStyle(.red)
-                        }
                     }
                     .font(.subheadline.weight(model.selectedTab == tab ? .semibold : .regular))
                     .foregroundStyle(model.selectedTab == tab ? Color.accentColor : .secondary)
@@ -165,8 +150,6 @@ struct DashboardView: View {
             UsageView(model: model)
         case .quota:
             QuotaView(model: model)
-        case .messages:
-            MessagesView(model: model)
         case .settings:
             SettingsView(
                 model: model,

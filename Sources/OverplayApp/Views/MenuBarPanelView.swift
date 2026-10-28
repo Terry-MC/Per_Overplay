@@ -157,15 +157,16 @@ struct MenuBarPanelView: View {
     }
 
     private func primaryMetric(_ account: Account) -> String {
-        if account.provider.capabilities.credits {
+        switch account.provider {
+        case .deepseek:
+            let balances = model.latestBalances(for: account)
+            guard !balances.isEmpty else { return "尚未同步" }
+            return balances.map {
+                Money.formatBalance($0.total, currency: $0.currency)
+            }.joined(separator: " · ")
+        case .openrouter:
             guard let quota = model.latestQuota(for: account) else { return "尚未同步" }
-            let label = account.provider == .openrouter ? "credits" : "额度"
-            return "\(label) \(Money.formatBalance(quota.remaining, currency: quota.currency)) · 已用 \(Money.formatBalance(quota.totalUsage, currency: quota.currency))"
+            return "credits \(Money.formatBalance(quota.remaining, currency: quota.currency)) · 已用 \(Money.formatBalance(quota.totalUsage, currency: quota.currency))"
         }
-        let balances = model.latestBalances(for: account)
-        guard !balances.isEmpty else { return "尚未同步" }
-        return balances.map {
-            Money.formatBalance($0.total, currency: $0.currency)
-        }.joined(separator: " · ")
     }
 }

@@ -409,7 +409,7 @@ public final class SyncEngine {
     }
 
     private func providerSupportsBudget(_ provider: ProviderKind) -> Bool {
-        provider.capabilities.usage
+        provider == .openrouter
     }
 
     private func missingCredentialOutcome(account: Account) -> SyncOutcome {
