@@ -13,7 +13,7 @@ struct QuotaView: View {
                 EmptyStateView(
                     symbol: "gauge.with.dots.needle.50percent",
                     title: "暂无账户",
-                    message: "添加 DeepSeek 或 OpenRouter 账户后，可在此查看官方余额、credits 与本地预算。"
+                    message: "添加 DeepSeek 或 OpenRouter 真实账户，或切换到演示模式查看各平台虚拟额度、用量与本地预算。"
                 )
             } else {
                 ForEach(model.accounts) { account in
@@ -64,7 +64,7 @@ struct QuotaView: View {
                     AnomalyNotice(message: issue)
                 }
 
-                if account.provider == .deepseek {
+                if account.provider.capabilities.balance {
                     deepSeekSection(account)
                 } else {
                     openRouterSection(account)
@@ -245,12 +245,13 @@ struct QuotaView: View {
     private func openRouterSection(_ account: Account) -> some View {
         Divider()
         let quota = model.latestQuota(for: account)
-        let status = model.creditDataStatus(for: account).prefixed("官方 credits")
+        let quotaName = account.provider == .openrouter ? "credits" : "额度"
+        let status = model.creditDataStatus(for: account).prefixed("官方 \(quotaName)")
         if let quota {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 20) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("官方 credits 剩余").font(.caption).foregroundStyle(.secondary)
+                        Text("官方 \(quotaName) 剩余").font(.caption).foregroundStyle(.secondary)
                         DataValueLabel(
                             text: Money.formatBalance(quota.remaining, currency: quota.currency),
                             status: status,
@@ -288,7 +289,7 @@ struct QuotaView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 20) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("官方 credits 剩余").font(.caption).foregroundStyle(.secondary)
+                        Text("官方 \(quotaName) 剩余").font(.caption).foregroundStyle(.secondary)
                         DataValueLabel(
                             text: "0",
                             status: status,
@@ -555,7 +556,7 @@ struct BudgetEditorView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text("\(account.displayName) · \(model.currencyLabel(for: account))").font(.headline)
                 if kind == .budget {
-                    Text("OpenRouter 月度预算仅用于本机告警，与官方 credits 额度分开；使用率达到 80% / 100% 时各触发一次告警。")
+                    Text("月度预算按本机自然月统计用量费用，仅用于本机告警，与厂商官方额度分开；使用率达到 80% / 100% 时各触发一次告警。")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

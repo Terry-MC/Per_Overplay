@@ -157,17 +157,42 @@ struct MetricCard: View {
     }
 }
 
+struct ProviderStyle {
+    var abbreviation: String
+    var color: Color
+}
+
+func providerStyle(for provider: ProviderKind) -> ProviderStyle {
+    switch provider {
+    case .deepseek: return ProviderStyle(abbreviation: "D", color: .blue)
+    case .openrouter: return ProviderStyle(abbreviation: "O", color: .purple)
+    case .kimi: return ProviderStyle(abbreviation: "K", color: .teal)
+    case .glm: return ProviderStyle(abbreviation: "G", color: .cyan)
+    case .minimax: return ProviderStyle(abbreviation: "MM", color: .orange)
+    case .qwen: return ProviderStyle(abbreviation: "Q", color: .indigo)
+    case .seed: return ProviderStyle(abbreviation: "S", color: .green)
+    case .hunyuan: return ProviderStyle(abbreviation: "H", color: .teal)
+    case .openai: return ProviderStyle(abbreviation: "AI", color: .mint)
+    case .anthropic: return ProviderStyle(abbreviation: "C", color: .orange)
+    case .gemini: return ProviderStyle(abbreviation: "GM", color: .blue)
+    case .meta: return ProviderStyle(abbreviation: "L", color: .blue)
+    case .xai: return ProviderStyle(abbreviation: "X", color: .gray)
+    case .mistral: return ProviderStyle(abbreviation: "MI", color: .red)
+    }
+}
+
 struct ProviderMark: View {
     var provider: ProviderKind
 
     var body: some View {
+        let style = providerStyle(for: provider)
         RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .fill(provider == .deepseek ? Color.blue.opacity(0.16) : Color.purple.opacity(0.16))
+            .fill(style.color.opacity(0.16))
             .frame(width: 34, height: 34)
             .overlay(
-                Text(provider == .deepseek ? "D" : "O")
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(provider == .deepseek ? Color.blue : Color.purple)
+                Text(style.abbreviation)
+                    .font(style.abbreviation.count > 1 ? .caption.weight(.bold) : .headline.weight(.bold))
+                    .foregroundStyle(style.color)
             )
             .accessibilityLabel(provider.displayName)
     }

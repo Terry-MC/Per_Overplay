@@ -49,11 +49,11 @@ struct OverviewView: View {
                     title: "官方额度剩余",
                     valueLines: model.officialCreditsRemaining.isEmpty
                         ? [] : UIFormat.costLines(model.officialCreditsRemaining),
-                    footnote: "OpenRouter credits（官方）· total_credits − total_usage。",
+                    footnote: "厂商官方额度（total_credits − total_usage），非本地预算；演示平台为虚拟额度。",
                     symbol: "gauge.with.dots.needle.50percent",
                     isDemo: model.isDemo,
                     emptyText: "0",
-                    status: model.creditDataStatus().prefixed("官方 credits")
+                    status: model.creditDataStatus().prefixed("官方额度")
                 )
                 MetricCard(
                     title: "官方余额",
@@ -163,14 +163,9 @@ struct OverviewView: View {
         )
     }
 
-    @ViewBuilder
     private func platformButton(for provider: ProviderKind) -> some View {
-        switch provider {
-        case .deepseek:
-            platformButton(provider, title: "DeepSeek", letter: "D", color: .blue)
-        case .openrouter:
-            platformButton(provider, title: "OpenRouter", letter: "O", color: .purple)
-        }
+        let style = providerStyle(for: provider)
+        return platformButton(provider, title: provider.displayName, letter: style.abbreviation, color: style.color)
     }
 
     private func accountFilterChips(platform: ProviderKind) -> some View {
@@ -220,9 +215,9 @@ struct OverviewView: View {
                         .font(.caption)
                 } else if let letter {
                     Text(letter)
-                        .font(.caption2.weight(.bold))
+                        .font(.system(size: letter.count > 1 ? 7 : 9, weight: .bold))
                         .foregroundStyle(.white)
-                        .frame(width: 16, height: 16)
+                        .frame(width: 18, height: 18)
                         .background(Circle().fill(color))
                 }
                 Text(title)
@@ -262,11 +257,11 @@ struct OverviewView: View {
     }
 
     private var officialBalanceFootnote: String {
-        if let selected = model.selectedOverviewAccount, selected.provider == .openrouter {
-            return "所选账户为 OpenRouter，不提供 DeepSeek 官方余额。"
+        if let selected = model.selectedOverviewAccount, !selected.provider.capabilities.balance {
+            return "所选账户为 \(selected.provider.displayName)，不提供官方余额。"
         }
-        if model.overviewPlatformFilter == .openrouter {
-            return "OpenRouter 平台不提供 DeepSeek 官方余额。"
+        if let platform = model.overviewPlatformFilter, !platform.capabilities.balance {
+            return "\(platform.displayName) 平台不提供官方余额。"
         }
         if let code = model.balanceCurrencyFilter {
             if model.availableBalanceCurrencies.count > 1 {
@@ -279,8 +274,8 @@ struct OverviewView: View {
 
     private var officialBalanceStatus: DataStatus {
         if let selected = model.selectedOverviewAccount {
-            if selected.provider == .openrouter {
-                return .missing("所选账户为 OpenRouter，不提供官方余额；0 仅为占位")
+            if !selected.provider.capabilities.balance {
+                return .missing("所选账户为 \(selected.provider.displayName)，不提供官方余额；0 仅为占位")
                     .prefixed("官方余额")
             }
             if let code = model.balanceCurrencyFilter, model.officialBalances.isEmpty {
@@ -289,8 +284,8 @@ struct OverviewView: View {
             }
             return model.balanceDataStatus(for: selected).prefixed("官方余额")
         }
-        if model.overviewPlatformFilter == .openrouter {
-            return .missing("OpenRouter 平台不提供官方余额；0 仅为占位")
+        if let platform = model.overviewPlatformFilter, !platform.capabilities.balance {
+            return .missing("\(platform.displayName) 平台不提供官方余额；0 仅为占位")
                 .prefixed("官方余额")
         }
         if let code = model.balanceCurrencyFilter, model.officialBalances.isEmpty {
@@ -451,12 +446,15 @@ struct AccountCardView: View {
 
     @ViewBuilder
     private var metrics: some View {
-        switch account.provider {
-        case .deepseek:
+        if account.provider.capabilities.balance {
             deepSeekMetrics
-        case .openrouter:
+        } else {
             openRouterMetrics
         }
+    }
+
+    private var quotaMetricTitle: String {
+        account.provider == .openrouter ? "credits 剩余" : "额度剩余"
     }
 
     @ViewBuilder
@@ -548,11 +546,11 @@ struct AccountCardView: View {
     @ViewBuilder
     private var openRouterMetrics: some View {
         let quota = model.latestQuota(for: account)
-        let status = model.creditDataStatus(for: account).prefixed("credits 剩余")
+        let status = model.creditDataStatus(for: account).prefixed(quotaMetricTitle)
         if let quota {
             HStack(alignment: .firstTextBaseline, spacing: 18) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("credits 剩余")
+                    Text(quotaMetricTitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     DataValueLabel(
@@ -572,7 +570,7 @@ struct AccountCardView: View {
                 .foregroundStyle(.secondary)
                 Spacer()
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text("官方 credits")
+                    Text("官方额度")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     Text(UIFormat.compactDate(quota.asOf))
@@ -585,7 +583,7 @@ struct AccountCardView: View {
             BudgetSummaryView(model: model, account: account)
         } else {
             VStack(alignment: .leading, spacing: 4) {
-                Text("credits 剩余 · \(model.currencyLabel(for: account))")
+                Text("\(quotaMetricTitle) · \(model.currencyLabel(for: account))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 DataValueLabel(

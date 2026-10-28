@@ -10,6 +10,8 @@ struct LaunchOptions {
     var snapshotPath: String?
     var snapshotDirectory: String?
     var dataDirectory: URL?
+    var overviewPlatform: ProviderKind?
+    var overviewAccount: String?
     var windowHeight: CGFloat?
     var darkAppearance = false
     var uiSmoke = false
@@ -40,6 +42,12 @@ struct LaunchOptions {
             case "--data-dir" where index + 1 < arguments.count:
                 index += 1
                 options.dataDirectory = URL(fileURLWithPath: arguments[index], isDirectory: true)
+            case "--overview-platform" where index + 1 < arguments.count:
+                index += 1
+                options.overviewPlatform = ProviderKind(rawValue: arguments[index])
+            case "--overview-account" where index + 1 < arguments.count:
+                index += 1
+                options.overviewAccount = arguments[index]
             case "--window-height" where index + 1 < arguments.count:
                 index += 1
                 if let height = Double(arguments[index]) {
@@ -89,6 +97,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             model.dismissAllToasts()
         }
         model.selectedTab = options.tab
+        if let platform = options.overviewPlatform {
+            model.overviewPlatformFilter = platform
+            if let account = options.overviewAccount {
+                model.overviewAccountFilter = account
+            }
+        }
         windowController = DashboardWindowController(model: model)
         statusBarController = StatusBarController(model: model) { [weak self] tab in
             self?.showMainWindow(tab: tab)

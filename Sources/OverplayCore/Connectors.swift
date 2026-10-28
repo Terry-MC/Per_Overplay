@@ -11,7 +11,32 @@ public enum ConnectorFactory {
         switch provider {
         case .deepseek: return DeepSeekConnector(transport: transport)
         case .openrouter: return OpenRouterConnector(transport: transport)
+        default: return UnsupportedConnector(provider: provider)
         }
+    }
+}
+
+public struct UnsupportedConnector: ProviderConnector {
+    public let provider: ProviderKind
+
+    public init(provider: ProviderKind) {
+        self.provider = provider
+    }
+
+    public func testConnection(credential: String, now: Date) async -> ConnectionTestResult {
+        ConnectionTestResult(
+            category: .unknown,
+            message: "\(provider.displayName) 尚未接入真实连接器，仅在演示模式中提供虚拟数据。"
+        )
+    }
+
+    public func sync(account: Account, credential: String, now: Date) async -> SyncOutcome {
+        SyncOutcome(
+            status: .failed,
+            error: "\(provider.displayName) 尚未接入真实连接器",
+            capabilities: provider.capabilities,
+            source: "unsupported"
+        )
     }
 }
 

@@ -3,20 +3,52 @@ import Foundation
 public enum ProviderKind: String, Codable, CaseIterable, Identifiable {
     case deepseek
     case openrouter
+    case kimi
+    case glm
+    case minimax
+    case qwen
+    case seed
+    case hunyuan
+    case openai
+    case anthropic
+    case gemini
+    case meta
+    case xai
+    case mistral
+
+    public static let realAccountProviders: [ProviderKind] = [.deepseek, .openrouter]
 
     public var id: String { rawValue }
+
+    public var supportsRealConnection: Bool {
+        Self.realAccountProviders.contains(self)
+    }
 
     public var displayName: String {
         switch self {
         case .deepseek: return "DeepSeek"
         case .openrouter: return "OpenRouter"
+        case .kimi: return "Kimi"
+        case .glm: return "GLM"
+        case .minimax: return "MiniMax"
+        case .qwen: return "Qwen"
+        case .seed: return "豆包 Seed"
+        case .hunyuan: return "腾讯混元"
+        case .openai: return "OpenAI GPT"
+        case .anthropic: return "Anthropic Claude"
+        case .gemini: return "Google Gemini"
+        case .meta: return "Meta Llama"
+        case .xai: return "xAI Grok"
+        case .mistral: return "Mistral"
         }
     }
 
     public var defaultCurrency: String {
         switch self {
-        case .deepseek: return "CNY"
-        case .openrouter: return "USD"
+        case .deepseek, .kimi, .glm, .minimax, .qwen, .seed, .hunyuan:
+            return "CNY"
+        case .openrouter, .openai, .anthropic, .gemini, .meta, .xai, .mistral:
+            return "USD"
         }
     }
 
@@ -37,6 +69,14 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable {
                 cost: true,
                 credits: true,
                 note: "需 Management Key；用量窗口约 30 天（UTC 日桶）"
+            )
+        default:
+            return ProviderCapabilities(
+                balance: false,
+                usage: true,
+                cost: true,
+                credits: true,
+                note: "演示平台；真实连接器未接入"
             )
         }
     }

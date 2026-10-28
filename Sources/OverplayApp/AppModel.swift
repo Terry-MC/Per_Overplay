@@ -705,13 +705,19 @@ final class AppModel: ObservableObject {
 
     var officialCreditsRemaining: [String: Decimal] {
         if let selectedOverviewAccount {
-            guard selectedOverviewAccount.provider == .openrouter,
+            guard selectedOverviewAccount.provider.capabilities.credits,
                   let quota = quotas[selectedOverviewAccount.id] else { return [:] }
             return [quota.currency: quota.remaining]
         }
-        guard overviewPlatformFilter != .deepseek else { return [:] }
+        let scoped: [Account]
+        if let overviewPlatformFilter {
+            guard overviewPlatformFilter.capabilities.credits else { return [:] }
+            scoped = accounts.filter { $0.provider == overviewPlatformFilter }
+        } else {
+            scoped = accounts
+        }
         var result: [String: Decimal] = [:]
-        for account in accounts where account.enabled && account.provider == .openrouter {
+        for account in scoped where account.enabled {
             guard let quota = quotas[account.id] else { continue }
             result[quota.currency, default: 0] += quota.remaining
         }
@@ -739,18 +745,18 @@ final class AppModel: ObservableObject {
 
     var availableBalanceCurrencies: [String] {
         if let selectedOverviewAccount {
-            return selectedOverviewAccount.provider == .deepseek
+            return selectedOverviewAccount.provider.capabilities.balance
                 ? balanceCurrencies(for: selectedOverviewAccount)
                 : []
         }
-        guard overviewPlatformFilter != .openrouter else { return [] }
+        guard overviewPlatformFilter == nil || overviewPlatformFilter == .deepseek else { return [] }
         let codes = activeDeepSeekAccounts.flatMap { balanceCurrencies(for: $0) }
         return Array(Set(codes)).sorted()
     }
 
     var officialBalances: [String: Decimal] {
         if let selectedOverviewAccount {
-            guard selectedOverviewAccount.provider == .deepseek else { return [:] }
+            guard selectedOverviewAccount.provider.capabilities.balance else { return [:] }
             let totals = BalanceSummary.totalsByCurrency(
                 balances: balances,
                 accountIds: [selectedOverviewAccount.id]
@@ -758,7 +764,7 @@ final class AppModel: ObservableObject {
             guard let balanceCurrencyFilter else { return [:] }
             return totals.filter { $0.key == balanceCurrencyFilter }
         }
-        guard overviewPlatformFilter != .openrouter else { return [:] }
+        guard overviewPlatformFilter == nil || overviewPlatformFilter == .deepseek else { return [:] }
         let ids = Set(activeDeepSeekAccounts.map(\.id))
         let totals = BalanceSummary.totalsByCurrency(balances: balances, accountIds: ids)
         guard let balanceCurrencyFilter else { return [:] }
@@ -770,20 +776,22 @@ final class AppModel: ObservableObject {
     }
 
     func currencyLabel(for account: Account) -> String {
-        switch account.provider {
-        case .deepseek:
+        if account.provider.capabilities.balance {
             let currencies = balanceCurrencies(for: account)
             if currencies.isEmpty {
                 return account.lastSuccessAt == nil ? "币种待同步" : "币种未知"
             }
             return currencies.joined(separator: " / ")
-        case .openrouter:
-            return latestQuota(for: account)?.currency ?? account.provider.defaultCurrency
         }
+        return latestQuota(for: account)?.currency ?? account.provider.defaultCurrency
     }
 
-    var openRouterAccounts: [Account] {
-        accounts.filter { $0.provider == .openrouter }
+    var usageAccounts: [Account] {
+        accounts.filter { $0.provider.capabilities.usage }
+    }
+
+    var creditAccounts: [Account] {
+        accounts.filter { $0.provider.capabilities.credits }
     }
 
     var activeDeepSeekAccounts: [Account] {
@@ -812,13 +820,13 @@ final class AppModel: ObservableObject {
         return reasons.isEmpty ? nil : reasons.joined(separator: "；")
     }
 
-    private func openRouterDataStatus() -> DataStatus {
-        if openRouterAccounts.isEmpty {
-            return .missing("暂无 OpenRouter 账户；DeepSeek 官方不提供历史费用 / 用量接口")
+    private func usageRecordsStatus(for accounts: [Account], emptyReason: String) -> DataStatus {
+        if accounts.isEmpty {
+            return .missing(emptyReason)
         }
-        let enabled = openRouterAccounts.filter(\.enabled)
+        let enabled = accounts.filter(\.enabled)
         if enabled.isEmpty {
-            return .missing("OpenRouter 账户均已禁用；0 仅为占位")
+            return .missing("所选账户均已禁用；0 仅为占位")
         }
         let issues = enabled.compactMap { dataIssue(for: $0) }
         if !issues.isEmpty {
@@ -826,7 +834,7 @@ final class AppModel: ObservableObject {
         }
         let unsynced = enabled.filter { $0.lastSuccessAt == nil }
         if unsynced.count == enabled.count {
-            return .missing("OpenRouter 尚未成功同步；0 仅为占位，不代表真实消费")
+            return .missing("所选账户尚未成功同步用量；0 仅为占位，不代表真实消费")
         }
         if !unsynced.isEmpty {
             return .anomaly(
@@ -836,62 +844,74 @@ final class AppModel: ObservableObject {
         return .actual
     }
 
-    private func overviewOpenRouterDataStatus() -> DataStatus {
-        if let selectedOverviewAccount {
-            switch selectedOverviewAccount.provider {
-            case .deepseek:
-                return .missing("所选账户为 DeepSeek，不提供历史费用 / 用量；0 仅为占位")
-            case .openrouter:
-                if let issue = dataIssue(for: selectedOverviewAccount) { return .anomaly(issue) }
-                if !selectedOverviewAccount.enabled { return .missing("该账户已禁用；0 仅为占位") }
-                if selectedOverviewAccount.lastSuccessAt == nil {
-                    return .missing("该账户尚未成功同步；0 仅为占位")
-                }
-                return .actual
-            }
+    private func allUsageDataStatus() -> DataStatus {
+        usageRecordsStatus(
+            for: usageAccounts,
+            emptyReason: "暂无可统计用量 / 费用的账户；DeepSeek 官方不提供历史费用 / 用量接口；0 仅为占位"
+        )
+    }
+
+    private var scopedUsageAccounts: [Account] {
+        if let selectedOverviewAccount { return [selectedOverviewAccount] }
+        guard let overviewPlatformFilter else { return usageAccounts }
+        return usageAccounts.filter { $0.provider == overviewPlatformFilter }
+    }
+
+    private func overviewUsageDataStatus() -> DataStatus {
+        if let selectedOverviewAccount, !selectedOverviewAccount.provider.capabilities.usage {
+            return .missing("所选账户为 \(selectedOverviewAccount.provider.displayName)，不提供历史费用 / 用量；0 仅为占位")
         }
-        if overviewPlatformFilter == .deepseek {
-            return .missing("DeepSeek 平台不提供历史费用 / 用量；0 仅为占位")
+        if let platform = overviewPlatformFilter, !platform.capabilities.usage {
+            return .missing("\(platform.displayName) 平台不提供历史费用 / 用量；0 仅为占位")
         }
-        return openRouterDataStatus()
+        return usageRecordsStatus(
+            for: scopedUsageAccounts,
+            emptyReason: "所选范围暂无可统计用量 / 费用的账户；0 仅为占位"
+        )
     }
 
     func costDataStatus(forToday: Bool) -> DataStatus {
-        let base = overviewOpenRouterDataStatus()
+        let base = overviewUsageDataStatus()
         guard case .actual = base else { return base }
         let values = forToday ? todayCosts : monthCosts
         guard values.isEmpty else { return .actual }
         if forToday {
-            return .missing("OpenRouter 官方活动窗口仅覆盖完整 UTC 日，今日数据将在下一 UTC 日回填；0 仅为占位")
+            return .missing("厂商活动窗口通常仅覆盖完整 UTC 日，今日数据将在下一 UTC 日回填；0 仅为占位")
         }
-        return .missing("本机自然月内暂无 OpenRouter activity 费用记录，可能不含今天或超出约 30 天窗口；0 仅为占位")
+        return .missing("本机自然月内暂无费用记录，可能不含今天或超出约 30 天窗口；0 仅为占位")
     }
 
     func tokenDataStatus() -> DataStatus {
-        let base = overviewOpenRouterDataStatus()
+        let base = overviewUsageDataStatus()
         guard case .actual = base else { return base }
         if tokenSummary.providersWithTokens == 0 {
-            return .missing("所选范围没有可用的 token 数据；DeepSeek 官方不提供历史 token，OpenRouter 仅覆盖约 30 个 UTC 日；0 仅为占位")
+            return .missing("所选范围没有可用的 token 数据；部分厂商不提供历史 token，活动窗口约 30 个 UTC 日；0 仅为占位")
         }
         return .actual
     }
 
     func creditDataStatus() -> DataStatus {
         if let selectedOverviewAccount {
-            if selectedOverviewAccount.provider == .deepseek {
-                return .missing("所选账户为 DeepSeek，不提供 credits；0 仅为占位")
+            guard selectedOverviewAccount.provider.capabilities.credits else {
+                return .missing("所选账户为 \(selectedOverviewAccount.provider.displayName)，不提供 credits；0 仅为占位")
             }
             return creditDataStatus(for: selectedOverviewAccount)
         }
-        if overviewPlatformFilter == .deepseek {
-            return .missing("DeepSeek 平台不提供 credits；0 仅为占位")
+        var scoped: [Account]
+        if let platform = overviewPlatformFilter {
+            guard platform.capabilities.credits else {
+                return .missing("\(platform.displayName) 平台不提供 credits；0 仅为占位")
+            }
+            scoped = creditAccounts.filter { $0.provider == platform }
+        } else {
+            scoped = creditAccounts
         }
-        if openRouterAccounts.isEmpty {
-            return .missing("暂无 OpenRouter 账户；0 仅为占位")
+        if scoped.isEmpty {
+            return .missing("暂无提供 credits 的账户；0 仅为占位")
         }
-        let enabled = openRouterAccounts.filter(\.enabled)
+        let enabled = scoped.filter(\.enabled)
         if enabled.isEmpty {
-            return .missing("OpenRouter 账户均已禁用；0 仅为占位")
+            return .missing("所选 credits 账户均已禁用；0 仅为占位")
         }
         let issues = enabled.compactMap { dataIssue(for: $0) }
         if !issues.isEmpty {
@@ -901,7 +921,7 @@ final class AppModel: ObservableObject {
         let withQuota = enabled.filter { latestQuota(for: $0) != nil }
         if withQuota.isEmpty {
             if unsynced.count == enabled.count {
-                return .missing("OpenRouter 尚未成功同步 credits；0 仅为占位")
+                return .missing("所选账户尚未成功同步 credits；0 仅为占位")
             }
             return .missing("厂商未返回 credits 数据；0 仅为占位")
         }
@@ -979,9 +999,6 @@ final class AppModel: ObservableObject {
             }
             budgetAccounts = [selectedOverviewAccount]
         } else {
-            if overviewPlatformFilter == .deepseek {
-                return .missing("DeepSeek 平台没有本地预算；0 仅为占位")
-            }
             budgetAccounts = accounts.filter {
                 (overviewPlatformFilter == nil || $0.provider == overviewPlatformFilter) && $0.budget != nil
             }
@@ -1006,12 +1023,12 @@ final class AppModel: ObservableObject {
     }
 
     func usageDataStatus() -> DataStatus {
-        let base = openRouterDataStatus()
+        let base = allUsageDataStatus()
         if case .anomaly = base { return base }
         if hasUsageFilters, !unfilteredRecords.isEmpty { return .actual }
         guard case .actual = base else { return base }
         if unfilteredRecords.isEmpty {
-            return .missing("所选范围没有 OpenRouter activity 记录；DeepSeek 官方不提供历史用量；0 仅为占位")
+            return .missing("所选范围没有可统计的用量记录；DeepSeek 官方不提供历史用量；0 仅为占位")
         }
         return .actual
     }
@@ -1054,14 +1071,13 @@ final class AppModel: ObservableObject {
         if let lastSuccess = account.lastSuccessAt {
             if now.timeIntervalSince(lastSuccess) > settings.refreshInterval * 2 { return .stale }
             if account.lastError != nil { return .partial }
-            switch account.provider {
-            case .deepseek where latestBalances(for: account).isEmpty:
+            if account.provider.capabilities.balance, latestBalances(for: account).isEmpty {
                 return .connectedNoData
-            case .openrouter where latestQuota(for: account) == nil:
-                return .connectedNoData
-            default:
-                return .healthy
             }
+            if account.provider.capabilities.credits, latestQuota(for: account) == nil {
+                return .connectedNoData
+            }
+            return .healthy
         }
         if account.lastError != nil { return .failed }
         return .neverSynced
@@ -1086,30 +1102,35 @@ final class AppModel: ObservableObject {
             if account.lastError != nil { return "能力未验证（同步失败）" }
             return "等待连接测试"
         }
+        let capabilities = account.provider.capabilities
         if account.lastError != nil {
-            switch account.provider {
-            case .deepseek:
-                return latestBalances(for: account).isEmpty
-                    ? "同步异常 · 余额不可用"
-                    : "部分成功"
-            case .openrouter:
+            if capabilities.credits {
                 return latestQuota(for: account) == nil
                     ? "同步异常 · credits 不可用"
                     : "credits 可用；用量接口暂时不可用"
             }
+            if capabilities.balance {
+                return latestBalances(for: account).isEmpty
+                    ? "同步异常 · 余额不可用"
+                    : "部分成功"
+            }
+            return "部分成功"
         }
-        switch account.provider {
-        case .deepseek:
+        if capabilities.credits {
+            if latestQuota(for: account) == nil {
+                return "厂商未返回 credits"
+            }
+            return account.isDemo
+                ? "演示额度 / 用量 / 费用数据"
+                : "credits / 额度 / 用量 / 费用可用"
+        }
+        if capabilities.balance {
             if latestBalances(for: account).isEmpty {
                 return "厂商未返回余额"
             }
             return "余额可用 · 官方无历史用量 / 费用"
-        case .openrouter:
-            if latestQuota(for: account) == nil {
-                return "厂商未返回 credits"
-            }
-            return "credits / 额度 / 用量 / 费用可用"
         }
+        return "已连接"
     }
 
     func lastSyncText(for account: Account) -> String {
