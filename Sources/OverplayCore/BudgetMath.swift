@@ -15,6 +15,27 @@ public enum BudgetMath {
             }
     }
 
+    /// Returns nil when the account does not have a complete, usable activity sync.
+    /// A partial/failed/credential-invalid account must not be displayed as 0 spend.
+    public static func availableSpend(
+        account: Account,
+        records: [UsageRecord],
+        range: DayRange
+    ) -> Decimal? {
+        guard account.provider == .openrouter,
+              account.enabled,
+              !account.credentialInvalid,
+              account.lastError == nil,
+              account.lastSuccessAt != nil,
+              let budget = account.budget else { return nil }
+        return spend(
+            records: records,
+            accountId: account.id,
+            currency: budget.currency,
+            range: range
+        )
+    }
+
     public static func ratio(spend: Decimal?, budget: Budget?) -> Decimal? {
         guard let spend, let budget, budget.amount > 0 else { return nil }
         return spend / budget.amount * 100

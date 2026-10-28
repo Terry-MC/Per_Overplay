@@ -6,9 +6,15 @@ public enum SyncTrigger: String {
     case startup
 }
 
+private enum SyncAbort: Error {
+    case cancelled
+    case accountUnavailable
+}
+
 public enum SyncEvent {
     case started(accountId: String)
     case finished(accountId: String, outcome: SyncOutcome)
+    case cancelled(accountId: String)
     case alerts([AlertEvent])
     case scheduleChanged
 }
@@ -91,18 +97,6 @@ public final class SyncEngine {
         transport.shutdown()
     }
 
-    /// Cancels all scheduled work but keeps the engine and transport reusable.
-    public func cancelAllAccounts() {
-        let all = withLock { () -> [Task<Void, Never>] in
-            let values = Array(tasks.values)
-            tasks.removeAll()
-            nextDue.removeAll()
-            inFlight.removeAll()
-            return values
-        }
-        all.forEach { $0.cancel() }
-    }
-
     public func refreshDue(accounts: [Account], now: Date = Date()) {
         let due = withLock { () -> [Account] in
             guard !cancelled else { return [] }
@@ -119,8 +113,13 @@ public final class SyncEngine {
             withLock {
                 nextDue[account.id] = now.addingTimeInterval(settings.refreshInterval)
             }
-            start(account: account, trigger: .auto, now: now)
+            enqueue(account: account, trigger: .auto, now: now)
         }
+    }
+
+    @discardableResult
+    public func startManualRefresh(account: Account, now: Date = Date()) -> Bool {
+        enqueue(account: account, trigger: .manual, now: now)
     }
 
     @discardableResult
@@ -150,8 +149,15 @@ public final class SyncEngine {
 
         let connector = ConnectorFactory.make(for: account.provider, transport: transport)
         let outcome = await connector.sync(account: account, credential: credential, now: now)
-        if Task.isCancelled {
+        if Task.isCancelled || withLock({ cancelled }) {
             try? store.finishSyncRun(id: runId, status: "cancelled", error: nil, at: Date())
+            emit(.cancelled(accountId: account.id))
+            return nil
+        }
+        guard let liveAccount = (try? store.account(id: account.id)) ?? nil,
+              liveAccount.enabled else {
+            try? store.finishSyncRun(id: runId, status: "cancelled", error: "账户已删除或禁用", at: Date())
+            emit(.cancelled(accountId: account.id))
             return nil
         }
         finish(
@@ -222,6 +228,10 @@ public final class SyncEngine {
     ) {
         do {
             try persist(account: account, outcome: outcome, trigger: trigger, now: now)
+        } catch is SyncAbort {
+            try? store.finishSyncRun(id: runId, status: "cancelled", error: nil, at: now)
+            emit(.cancelled(accountId: account.id))
+            return
         } catch {
             let errorOutcome = SyncOutcome(
                 status: .failed,
@@ -248,6 +258,10 @@ public final class SyncEngine {
     }
 
     private func persist(account: Account, outcome: SyncOutcome, trigger: SyncTrigger, now: Date) throws {
+        guard !Task.isCancelled, !withLock({ cancelled }) else { throw SyncAbort.cancelled }
+        guard let liveAccount = try store.account(id: account.id), liveAccount.enabled else {
+            throw SyncAbort.accountUnavailable
+        }
         if !outcome.usageRecords.isEmpty {
             try store.upsertUsage(outcome.usageRecords, accountName: account.displayName)
         }
@@ -337,16 +351,21 @@ public final class SyncEngine {
         }
     }
 
-    private func start(account: Account, trigger: SyncTrigger, now: Date) {
-        let task = Task { [weak self] in
-            guard let self else { return }
-            _ = await self.refresh(account: account, trigger: trigger, now: now)
-            self.withLock {
-                _ = self.tasks.removeValue(forKey: account.id)
-            }
-        }
+    @discardableResult
+    private func enqueue(account: Account, trigger: SyncTrigger, now: Date) -> Bool {
         withLock {
+            guard !cancelled, !inFlight.contains(account.id), tasks[account.id] == nil else {
+                return false
+            }
+            let task = Task { [weak self] in
+                guard let self else { return }
+                _ = await self.refresh(account: account, trigger: trigger, now: now)
+                self.withLock {
+                    _ = self.tasks.removeValue(forKey: account.id)
+                }
+            }
             tasks[account.id] = task
+            return true
         }
     }
 

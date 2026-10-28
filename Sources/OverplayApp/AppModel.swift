@@ -118,6 +118,8 @@ final class AppModel: ObservableObject {
     private var transport: URLSessionTransport
     private var timer: Timer?
     private var bannerDismissTask: Task<Void, Never>?
+    private var connectionTestTask: Task<ConnectionTestResult, Never>?
+    private var connectionTestToken = 0
 
     private static let demoFlagKey = "overplay.demoMode"
     private static let demoDisclaimerKey = "overplay.demoDisclaimerAccepted"
@@ -167,7 +169,11 @@ final class AppModel: ObservableObject {
     func prepareForTermination() {
         timer?.invalidate()
         timer = nil
+        cancelConnectionTest()
         syncEngine?.cancelAll()
+        syncEngine?.onEvent = nil
+        syncEngine = nil
+        transport.shutdown()
     }
 
     // MARK: - Loading
@@ -178,8 +184,19 @@ final class AppModel: ObservableObject {
 
     @discardableResult
     private func openRealStoreIfNeeded() -> Bool {
-        if realStore != nil {
-            syncEngine?.updateSettings(settings)
+        if let realStore {
+            if syncEngine == nil {
+                let engine = SyncEngine(
+                    store: realStore,
+                    credentials: credentials,
+                    transport: transport,
+                    settings: settings
+                )
+                syncEngine = engine
+                configureEngineCallbacks()
+            } else {
+                syncEngine?.updateSettings(settings)
+            }
             return true
         }
         do {
@@ -281,6 +298,9 @@ final class AppModel: ObservableObject {
                 showBanner("\(outcome.error ?? "凭据失效")", style: .warning)
             }
             reloadFromStore()
+        case .cancelled(let accountId):
+            syncingAccountIds.remove(accountId)
+            reloadFromStore()
         case .alerts(let events):
             reloadFromStore()
             deliverNotifications(for: events)
@@ -318,9 +338,8 @@ final class AppModel: ObservableObject {
             return
         }
         guard let syncEngine else { return }
-        Task {
-            _ = await syncEngine.refresh(account: account, trigger: .manual)
-            reloadFromStore()
+        if !syncEngine.startManualRefresh(account: account) {
+            showBanner("该账户正在同步中，请等待当前请求结束", style: .info)
         }
     }
 
@@ -336,15 +355,12 @@ final class AppModel: ObservableObject {
         }
         guard let syncEngine else { return }
         lastRefreshAllAt = Date()
-        for (index, account) in enabled.enumerated() {
-            Task {
-                if index > 0 {
-                    try? await Task.sleep(nanoseconds: UInt64(index) * 150_000_000)
-                }
-                _ = await syncEngine.refresh(account: account, trigger: .manual)
-            }
+        let started = enabled.filter { syncEngine.startManualRefresh(account: $0) }.count
+        if started == 0 {
+            showBanner("所有账户都在同步中，请等待当前请求结束", style: .info)
+        } else {
+            showBanner("已开始刷新 \(started) 个账户", style: .info)
         }
-        showBanner("已开始刷新 \(enabled.count) 个账户", style: .info)
     }
 
     func isSyncing(_ account: Account) -> Bool {
@@ -428,8 +444,10 @@ final class AppModel: ObservableObject {
             return
         }
         guard let realStore else { return }
+        cancelConnectionTest()
         do {
             syncEngine?.cancel(accountId: account.id)
+            syncingAccountIds.remove(account.id)
             try credentials.deleteCredential(accountId: account.id)
             try realStore.deleteAccount(id: account.id, removeHistory: removeHistory)
             reloadFromStore()
@@ -443,10 +461,29 @@ final class AppModel: ObservableObject {
     }
 
     func testConnection(provider: ProviderKind, apiKey: String) async -> ConnectionTestResult {
+        cancelConnectionTest()
+        connectionTestToken += 1
+        let token = connectionTestToken
+        let credential = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let transport = URLSessionTransport()
-        defer { transport.shutdown() }
-        let connector = ConnectorFactory.make(for: provider, transport: transport)
-        return await connector.testConnection(credential: apiKey.trimmingCharacters(in: .whitespacesAndNewlines), now: Date())
+        let task = Task {
+            let connector = ConnectorFactory.make(for: provider, transport: transport)
+            let result = await connector.testConnection(credential: credential, now: Date())
+            transport.shutdown()
+            return result
+        }
+        connectionTestTask = task
+        let result = await task.value
+        if connectionTestToken == token {
+            connectionTestTask = nil
+        }
+        return result
+    }
+
+    private func cancelConnectionTest() {
+        connectionTestTask?.cancel()
+        connectionTestTask = nil
+        connectionTestToken += 1
     }
 
     // MARK: - Budget & thresholds
@@ -619,12 +656,10 @@ final class AppModel: ObservableObject {
     }
 
     func budgetSpend(for account: Account) -> Decimal? {
-        guard let budget = account.budget, account.lastSuccessAt != nil else { return nil }
         let (_, range) = CalendarDay.monthRange(now: now)
-        return BudgetMath.spend(
+        return BudgetMath.availableSpend(
+            account: account,
             records: usageRecords,
-            accountId: account.id,
-            currency: budget.currency,
             range: range
         )
     }
@@ -891,9 +926,12 @@ final class AppModel: ObservableObject {
         guard !isDemo else { return }
         do {
             let demo = try DemoData.makeStore(now: Date())
-            syncEngine?.cancelAllAccounts()
+            cancelConnectionTest()
+            syncEngine?.cancelAll()
+            syncEngine?.onEvent = nil
             syncEngine = nil
             realStore = nil
+            transport = URLSessionTransport()
             syncingAccountIds.removeAll()
             demoStore = demo
             isDemo = true
@@ -939,24 +977,37 @@ final class AppModel: ObservableObject {
             return
         }
         guard let realStore else { return }
-        do {
-            for account in accounts {
-                syncEngine?.cancel(accountId: account.id)
-            }
-            try credentials.deleteAll()
-            try realStore.clearAllData()
-            notifications.clearDelivered()
-            UserDefaults.standard.removeObject(forKey: Self.demoFlagKey)
-            UserDefaults.standard.removeObject(forKey: Self.demoDisclaimerKey)
-            selectedTab = .overview
-            selectedCurrency = nil
-            settings = AppSettings()
-            syncEngine?.updateSettings(settings)
-            reloadFromStore()
-            showOnboarding = true
+        cancelConnectionTest()
+        for account in accounts {
+            syncEngine?.cancel(accountId: account.id)
+        }
+        syncEngine?.cancelAll()
+        syncEngine?.onEvent = nil
+        syncEngine = nil
+        transport.shutdown()
+        var errors: [String] = []
+        do { try credentials.deleteAll() } catch {
+            errors.append("凭证删除失败：\(error.localizedDescription)")
+        }
+        do { try realStore.clearAllData() } catch {
+            errors.append("数据库清理失败：\(error.localizedDescription)")
+        }
+        notifications.clearDelivered()
+        UserDefaults.standard.removeObject(forKey: Self.demoFlagKey)
+        UserDefaults.standard.removeObject(forKey: Self.demoDisclaimerKey)
+        selectedTab = .overview
+        selectedCurrency = nil
+        syncingAccountIds.removeAll()
+        settings = AppSettings()
+        transport = URLSessionTransport()
+        _ = openRealStoreIfNeeded()
+        syncEngine?.updateSettings(settings)
+        reloadFromStore()
+        showOnboarding = true
+        if errors.isEmpty {
             showBanner("已清除账户、凭证、历史用量、告警记录与设置", style: .success)
-        } catch {
-            showBanner("清除数据失败：\(error.localizedDescription)", style: .error)
+        } else {
+            showBanner(errors.joined(separator: "；"), style: .error)
         }
     }
 

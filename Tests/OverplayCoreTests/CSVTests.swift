@@ -98,3 +98,46 @@ final class CSVTests: XCTestCase {
         XCTAssertEqual(grouped.first { $0.model == "m1" }?.cost, 3)
     }
 }
+
+extension CSVTests {
+    func testModelUsageAggregatesExtendedFieldsAndFlags() throws {
+        let records = [
+            UsageRecord(
+                accountId: "a", accountName: "A", provider: .openrouter, day: "2026-10-27",
+                model: "m1", promptTokens: 100, completionTokens: 50, reasoningTokens: 20,
+                cachedTokens: 10, requests: 3, cost: Decimal(string: "0.5")!, currency: "USD",
+                source: "s", updatedAt: TestClock.date()
+            ),
+            UsageRecord(
+                accountId: "a", accountName: "A", provider: .openrouter, day: "2026-10-26",
+                model: "m1", promptTokens: 50, completionTokens: 25, reasoningTokens: 5,
+                cachedTokens: 2, requests: 2, cost: Decimal(string: "0.25")!, currency: "USD",
+                source: "s", updatedAt: TestClock.date()
+            ),
+            UsageRecord(
+                accountId: "a", accountName: "A", provider: .openrouter, day: "2026-10-25",
+                model: "m2", cost: Decimal(string: "0.1")!, currency: "USD",
+                source: "s", updatedAt: TestClock.date()
+            )
+        ]
+        let grouped = UsageMath.groupByModel(records)
+        let m1 = try XCTUnwrap(grouped.first { $0.model == "m1" })
+        XCTAssertEqual(m1.promptTokens, 150)
+        XCTAssertEqual(m1.completionTokens, 75)
+        XCTAssertEqual(m1.reasoningTokens, 25)
+        XCTAssertEqual(m1.cachedTokens, 12)
+        XCTAssertEqual(m1.requests, 5)
+        XCTAssertTrue(m1.promptAvailable)
+        XCTAssertTrue(m1.completionAvailable)
+        XCTAssertTrue(m1.reasoningAvailable)
+        XCTAssertTrue(m1.cachedAvailable)
+        XCTAssertTrue(m1.requestsAvailable)
+
+        let m2 = try XCTUnwrap(grouped.first { $0.model == "m2" })
+        XCTAssertFalse(m2.promptAvailable)
+        XCTAssertFalse(m2.completionAvailable)
+        XCTAssertFalse(m2.reasoningAvailable)
+        XCTAssertFalse(m2.cachedAvailable)
+        XCTAssertFalse(m2.requestsAvailable)
+    }
+}

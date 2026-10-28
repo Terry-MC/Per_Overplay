@@ -133,7 +133,6 @@ public struct Account: Identifiable, Equatable {
             : name
     }
 
-    public var credentialKey: String { "overplay.account.\(id)" }
 
     public var capabilities: ProviderCapabilities { provider.capabilities }
 }

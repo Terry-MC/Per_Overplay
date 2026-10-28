@@ -15,6 +15,7 @@ struct LaunchOptions {
     var uiSmoke = false
     var showMenuPanel = false
     var benchmark = false
+    var scrollBottom = false
 
     static func parse(_ arguments: [String]) -> LaunchOptions {
         var options = LaunchOptions()
@@ -51,6 +52,8 @@ struct LaunchOptions {
                 options.showMenuPanel = true
             case "--benchmark":
                 options.benchmark = true
+            case "--scroll-bottom":
+                options.scrollBottom = true
             default:
                 break
             }
@@ -226,12 +229,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             for tab in DashboardTab.allCases {
                 model.selectedTab = tab
                 try? await Task.sleep(nanoseconds: 800_000_000)
+                if options.scrollBottom {
+                    scrollMainScrollViewToBottom()
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                }
                 capture(to: url.appendingPathComponent("\(tab.rawValue).png"))
             }
         } else if let path = options.snapshotPath {
+            if options.scrollBottom {
+                scrollMainScrollViewToBottom()
+                try? await Task.sleep(nanoseconds: 250_000_000)
+            }
             capture(to: URL(fileURLWithPath: path))
         }
         NSApp.terminate(nil)
+    }
+
+    private func scrollMainScrollViewToBottom() {
+        guard let contentView = windowController.window?.contentView else { return }
+        var candidates: [NSScrollView] = []
+        func walk(_ view: NSView) {
+            if let scrollView = view as? NSScrollView {
+                candidates.append(scrollView)
+            }
+            for subview in view.subviews { walk(subview) }
+        }
+        walk(contentView)
+        guard let scrollView = candidates.max(by: { verticalOverflow($0) < verticalOverflow($1) }),
+              let documentView = scrollView.documentView else { return }
+        let clip = scrollView.contentView
+        let horizontalTable = candidates
+            .filter { $0 !== scrollView }
+            .max { horizontalOverflow($0) < horizontalOverflow($1) }
+        var targetY = max(0, documentView.bounds.height - clip.bounds.height)
+        if let horizontalTable, horizontalOverflow(horizontalTable) > 0 {
+            let tableRect = horizontalTable.convert(horizontalTable.bounds, to: documentView)
+            targetY = max(0, tableRect.minY - 8)
+        }
+        clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: targetY))
+        scrollView.reflectScrolledClipView(clip)
+    }
+
+    private func verticalOverflow(_ scrollView: NSScrollView) -> CGFloat {
+        guard let documentView = scrollView.documentView else { return 0 }
+        return max(0, documentView.bounds.height - scrollView.contentView.bounds.height)
+    }
+
+    private func horizontalOverflow(_ scrollView: NSScrollView) -> CGFloat {
+        guard let documentView = scrollView.documentView else { return 0 }
+        return max(0, documentView.bounds.width - scrollView.contentView.bounds.width)
     }
 
     private func capture(to url: URL) {

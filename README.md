@@ -37,6 +37,7 @@ open DSOverplay.app        # 启动菜单栏应用
 - 预算 80% / 100%、余额低水位、连续同步失败、凭据失效、数据过期，以及去重、滞回与 6 小时冷却；
 - 单账户 single-flight、凭据缺失、部分成功不触发预算告警；
 - 自动刷新计时、启动错峰、5 分钟周期、指数退避、429 Retry-After 与凭据失效暂停重试；
+- 部分成功/凭据失效时预算不可用（不显示 0 或完整剩余）、手动刷新取消与在途写入保护；
 - 真实 `URLSession` 对 302 重定向的拒绝（本地一次性 HTTP 服务）；
 - Keychain 实际读写（测试使用独立 service 并在结束时清理）；
 - CSV 字段、转义、来源 / 时间范围 / 演示数据标识与无密钥。
@@ -59,6 +60,10 @@ open DSOverplay.app        # 启动菜单栏应用
 | 额度 | 设置 |
 | --- | --- |
 | ![额度](docs/screenshots/quota.png) | ![设置](docs/screenshots/settings.png) |
+
+| 模型拆分（含 reasoning / cached / 请求数） | 用量明细（滚动至表格） |
+| --- | --- |
+| ![模型拆分](docs/screenshots/usage-model.png) | ![用量明细](docs/screenshots/usage-detail.png) |
 
 另有引导页与深色模式截图：`docs/screenshots/onboarding.png`、`docs/screenshots/dark-overview.png`。
 

@@ -51,7 +51,7 @@ struct OverviewView: View {
                 MetricCard(
                     title: "本地预算剩余",
                     valueLines: budgetRemainingLines,
-                    footnote: "本地预算，不冒充官方额度；无预算或未同步时不计算。",
+                    footnote: "同币种账户净额，可能含超支账户抵扣；本地预算与官方 credits 分开，无完整数据时不计算。",
                     symbol: "target",
                     isDemo: model.isDemo
                 )
@@ -394,19 +394,31 @@ struct BudgetSummaryView: View {
                 HStack {
                     Text("本地预算")
                         .font(.caption.weight(.semibold))
-                    Text("\(Money.formatBalance(spend ?? 0, currency: budget.currency)) / \(Money.formatBalance(budget.amount, currency: budget.currency))")
+                    Text(Money.formatBalance(budget.amount, currency: budget.currency))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    if let ratio {
-                        Text("\(Money.percent(ratio))")
+                    if let spend, let ratio {
+                        Text("已用 \(Money.formatCost(spend, currency: budget.currency))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(Money.percent(ratio))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(ratio >= 100 ? .red : ratio >= 80 ? .orange : .green)
                     } else {
-                        Text("暂无用量数据").font(.caption).foregroundStyle(.secondary)
+                        Text("本月已用暂无完整数据")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
                     }
                 }
-                BudgetProgressBar(ratio: ratio, isDemo: model.isDemo)
+                if let ratio {
+                    BudgetProgressBar(ratio: ratio, isDemo: model.isDemo)
+                } else {
+                    Text("activity 尚未成功同步或部分失败；不显示为 0，也不计算使用率 / 剩余 / 预估。")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 HStack {
                     Text("本月已用 · 按厂商日桶，可能不含今天")
                         .font(.caption2)

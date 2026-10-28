@@ -271,54 +271,79 @@ struct QuotaView: View {
                 }
             }
             if let budget {
-                HStack(alignment: .firstTextBaseline, spacing: 18) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("本月已用").font(.caption).foregroundStyle(.secondary)
-                        Text(
-                            spend.map { Money.formatCost($0, currency: budget.currency) } ?? "暂无数据"
-                        )
-                        .font(.title3.weight(.semibold))
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("预算").font(.caption).foregroundStyle(.secondary)
-                        Text(Money.formatBalance(budget.amount, currency: budget.currency))
-                            .font(.title3.weight(.semibold))
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text((remaining ?? 0) < 0 ? "超支" : "剩余")
-                            .font(.caption).foregroundStyle(.secondary)
-                        Text(
-                            remaining.map { Money.formatBalance(abs($0), currency: budget.currency) } ?? "—"
-                        )
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle((remaining ?? 0) < 0 ? .red : .primary)
-                    }
-                    Spacer()
-                    if let ratio {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("使用率").font(.caption).foregroundStyle(.secondary)
-                            Text(Money.percent(ratio))
+                if let spend {
+                    HStack(alignment: .firstTextBaseline, spacing: 18) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("本月已用").font(.caption).foregroundStyle(.secondary)
+                            Text(Money.formatCost(spend, currency: budget.currency))
                                 .font(.title3.weight(.semibold))
-                                .foregroundStyle(ratio >= 100 ? .red : ratio >= 80 ? .orange : .green)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("预算").font(.caption).foregroundStyle(.secondary)
+                            Text(Money.formatBalance(budget.amount, currency: budget.currency))
+                                .font(.title3.weight(.semibold))
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text((remaining ?? 0) < 0 ? "超支" : "剩余")
+                                .font(.caption).foregroundStyle(.secondary)
+                            Text(
+                                remaining.map { Money.formatBalance(abs($0), currency: budget.currency) } ?? "—"
+                            )
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle((remaining ?? 0) < 0 ? .red : .primary)
+                        }
+                        Spacer()
+                        if let ratio {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("使用率").font(.caption).foregroundStyle(.secondary)
+                                Text(Money.percent(ratio))
+                                    .font(.title3.weight(.semibold))
+                                    .foregroundStyle(ratio >= 100 ? .red : ratio >= 80 ? .orange : .green)
+                            }
                         }
                     }
-                }
-                BudgetProgressBar(ratio: ratio, isDemo: model.isDemo)
-                HStack {
-                    Text("告知线 80% · 警戒线 100%（目标标记）")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    if let forecast {
-                        Text("预估月末 \(Money.formatBalance(forecast, currency: budget.currency)) · 线性外推，仅供参考")
+                    if let ratio {
+                        BudgetProgressBar(ratio: ratio, isDemo: model.isDemo)
+                    }
+                    HStack {
+                        Text("告知线 80% · 警戒线 100%（目标标记）")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
+                        Spacer()
+                        if let forecast {
+                            Text("预估月末 \(Money.formatBalance(forecast, currency: budget.currency)) · 线性外推，仅供参考")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                     }
+                    Text("本月已用按 OpenRouter UTC 日桶统计，可能不含今天，且仅覆盖接口约 30 天窗口；数据不完整时不触发预算告警。")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    HStack(alignment: .firstTextBaseline, spacing: 18) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("本月已用").font(.caption).foregroundStyle(.secondary)
+                            Text("暂无完整数据")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(.orange)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("预算").font(.caption).foregroundStyle(.secondary)
+                            Text(Money.formatBalance(budget.amount, currency: budget.currency))
+                                .font(.title3.weight(.semibold))
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("剩余").font(.caption).foregroundStyle(.secondary)
+                            Text("—").font(.title3.weight(.semibold))
+                        }
+                        Spacer()
+                    }
+                    Text("activity 尚未成功同步、部分失败或凭据失效；不显示为 0，不计算使用率、剩余和预估，也不触发预算阈值告警。")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Text("本月已用按 OpenRouter UTC 日桶统计，可能不含今天，且仅覆盖接口约 30 天窗口；数据不完整时不触发预算告警。")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text("未设置预算。设置后可查看使用率与 80% / 100% 告警；预算仅为本机设置。")
                     .font(.callout)

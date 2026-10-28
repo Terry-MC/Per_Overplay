@@ -173,11 +173,6 @@ public final class OverplayStore {
         try OverplayStore(path: ":memory:")
     }
 
-    public static var defaultDatabaseURL: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/Overplay", isDirectory: true)
-            .appendingPathComponent("overplay.sqlite")
-    }
 
     private func migrate() throws {
         lock.lock()

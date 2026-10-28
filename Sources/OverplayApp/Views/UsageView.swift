@@ -133,7 +133,7 @@ struct UsageView: View {
                         }
                     }
                     .frame(height: 210)
-                    Text("Reasoning tokens 已由厂商单列，不重复计入 totals；OpenRouter 用量窗口约 30 个 UTC 日。")
+                    Text("图表仅绘制 Prompt / Completion；Reasoning 属于 completion 子集、Cached 属于 prompt 子集，厂商单列，不重复计入总量。明细与模型表展示全部字段；OpenRouter 用量窗口约 30 个 UTC 日。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -326,19 +326,22 @@ struct UsageView: View {
         ) {
             let totalsByCurrency = model.costs(records)
             VStack(spacing: 0) {
-                gridRow(
-                    ["模型", "账户", "Prompt", "Completion", "费用", "占比"],
+                modelGridRow(
+                    ["模型", "账户", "Prompt", "Completion", "Reasoning", "Cached", "请求数", "usage 费用", "占比"],
                     header: true
                 )
                 ForEach(modelUsages) { usage in
                     Divider()
                     let total = usage.currency.flatMap { totalsByCurrency[$0] } ?? 0
                     let share = usage.costAvailable && total > 0 ? usage.cost / total * 100 : nil
-                    gridRow([
+                    modelGridRow([
                         usage.model,
                         usage.accountName,
                         usage.promptAvailable ? Money.formatInteger(usage.promptTokens) : "未提供",
                         usage.completionAvailable ? Money.formatInteger(usage.completionTokens) : "未提供",
+                        usage.reasoningAvailable ? Money.formatInteger(usage.reasoningTokens) : "未提供",
+                        usage.cachedAvailable ? Money.formatInteger(usage.cachedTokens) : "未提供",
+                        usage.requestsAvailable ? Money.formatInteger(usage.requests) : "未提供",
                         usage.costAvailable
                             ? Money.formatCost(usage.cost, currency: usage.currency ?? currency ?? "USD")
                             : "未提供",
@@ -366,22 +369,22 @@ struct UsageView: View {
         }
     }
 
-    private func gridRow(_ values: [String], header: Bool) -> some View {
-        HStack(spacing: 8) {
+    private let modelWidths: [CGFloat?] = [nil, 100, 70, 82, 78, 64, 56, 88, 52]
+
+    private func modelGridRow(_ values: [String], header: Bool) -> some View {
+        HStack(spacing: 6) {
             ForEach(Array(values.enumerated()), id: \.offset) { index, value in
                 Text(value)
-                    .font(header ? .caption.weight(.semibold) : .caption)
+                    .font(header ? .caption2.weight(.semibold) : .caption2)
                     .foregroundStyle(header ? .secondary : .primary)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                    .frame(
-                        maxWidth: index == 0 ? .infinity : (index == 1 ? 100 : nil),
-                        alignment: index >= 4 ? .trailing : .leading
-                    )
-                    .frame(minWidth: index == 0 ? 150 : nil, alignment: index >= 4 ? .trailing : .leading)
+                    .frame(width: modelWidths[index], alignment: index >= 2 ? .trailing : .leading)
+                    .frame(maxWidth: index == 0 ? .infinity : nil, alignment: .leading)
+                    .help(value)
             }
         }
-        .padding(.vertical, header ? 4 : 6)
+        .padding(.vertical, header ? 3 : 5)
     }
 
     private var detailTable: some View {
@@ -394,73 +397,73 @@ struct UsageView: View {
                 emptyChart("所选范围内没有明细数据。")
             } else {
                 let totals = model.costs(records)
-                VStack(spacing: 0) {
-                    HStack(spacing: 8) {
-                        detailCell("日期", weight: .semibold, width: 88)
-                        detailCell("账户", weight: .semibold, width: 108)
-                        detailCell("模型", weight: .semibold)
-                        detailCell("tokens", weight: .semibold, width: 84, alignment: .trailing)
-                        detailCell("费用", weight: .semibold, width: 84, alignment: .trailing)
-                        detailCell("占比", weight: .semibold, width: 54, alignment: .trailing)
-                        detailCell("来源", weight: .semibold, width: 150)
-                        detailCell("最后更新", weight: .semibold, width: 116, alignment: .trailing)
-                    }
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 4)
-                    ForEach(Array(records.sorted(by: { $0.day > $1.day }).prefix(200))) { record in
-                        Divider()
-                        let total = record.currency.flatMap { totals[$0] } ?? 0
-                        let share: String = {
-                            guard let cost = record.cost, total > 0 else { return "—" }
-                            return Money.percent(cost / total * 100)
-                        }()
-                        HStack(spacing: 8) {
-                            detailCell(record.day, width: 88)
-                            detailCell(record.accountName, width: 108)
-                            detailCell(record.model)
-                            detailCell(
-                                record.totalTokens.map(Money.formatInteger) ?? "未提供",
-                                width: 84, alignment: .trailing
-                            )
-                            detailCell(
+                ScrollView(.horizontal, showsIndicators: true) {
+                    VStack(spacing: 0) {
+                        detailGridRow(
+                            ["日期", "账户", "模型", "Prompt", "Completion", "Reasoning", "Cached", "请求数", "usage 费用", "BYOK", "占比", "来源", "最后更新"],
+                            header: true
+                        )
+                        ForEach(Array(records.sorted(by: { $0.day > $1.day }).prefix(200))) { record in
+                            Divider()
+                            let total = record.currency.flatMap { totals[$0] } ?? 0
+                            let share: String = {
+                                guard let cost = record.cost, total > 0 else { return "—" }
+                                return Money.percent(cost / total * 100)
+                            }()
+                            detailGridRow([
+                                record.day,
+                                record.accountName,
+                                record.model,
+                                record.promptTokens.map(Money.formatInteger) ?? "未提供",
+                                record.completionTokens.map(Money.formatInteger) ?? "未提供",
+                                record.reasoningTokens.map(Money.formatInteger) ?? "未提供",
+                                record.cachedTokens.map(Money.formatInteger) ?? "未提供",
+                                record.requests.map(Money.formatInteger) ?? "未提供",
                                 record.cost.map { Money.formatCost($0, currency: record.currency ?? "") } ?? "未提供",
-                                width: 84, alignment: .trailing
-                            )
-                            detailCell(share, width: 54, alignment: .trailing)
-                            detailCell(record.source, width: 150)
-                            detailCell(
-                                DateFormatters.mediumDateTime.string(from: record.updatedAt),
-                                width: 116, alignment: .trailing
-                            )
+                                record.byokCost.map { Money.formatCost($0, currency: record.currency ?? "USD") } ?? "未提供",
+                                share,
+                                record.source,
+                                DateFormatters.mediumDateTime.string(from: record.updatedAt)
+                            ], header: false)
                         }
-                        .padding(.vertical, 4)
                     }
+                    .frame(width: 1120, alignment: .leading)
                 }
                 if records.count > 200 {
                     Text("仅显示前 200 条；导出 CSV 包含当前筛选的全部记录。")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-                Text("来源与时间范围会写入导出文件；缺失字段显示“未提供”。")
+                Text("来源与时间范围会写入导出文件；缺失字段显示“未提供”。Reasoning 为 completion 子集、Cached 为 prompt 子集，均不重复计入总量。")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
         }
     }
 
-    private func detailCell(
-        _ text: String,
-        weight: Font.Weight = .regular,
-        width: CGFloat? = nil,
-        alignment: Alignment = .leading
-    ) -> some View {
-        Text(text)
-            .font(.caption.weight(weight))
-            .lineLimit(1)
-            .truncationMode(.middle)
-            .frame(width: width, alignment: alignment)
-            .frame(maxWidth: width == nil ? .infinity : nil, alignment: alignment)
-            .help(text)
+    private let detailWidths: [CGFloat?] = [78, 96, nil, 58, 66, 66, 56, 50, 80, 70, 45, 112, 96]
+
+    private func detailGridRow(_ values: [String], header: Bool) -> some View {
+        HStack(spacing: 5) {
+            ForEach(Array(values.enumerated()), id: \.offset) { index, value in
+                Text(value)
+                    .font(header ? .caption2.weight(.semibold) : .caption2)
+                    .foregroundStyle(header ? .secondary : .primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(
+                        width: detailWidths[index],
+                        alignment: numericColumn(index) ? .trailing : .leading
+                    )
+                    .frame(maxWidth: index == 2 ? .infinity : nil, alignment: .leading)
+                    .help(value)
+            }
+        }
+        .padding(.vertical, header ? 3 : 4)
+    }
+
+    private func numericColumn(_ index: Int) -> Bool {
+        (3...10).contains(index) || index == 12
     }
 
     private func emptyChart(_ message: String) -> some View {

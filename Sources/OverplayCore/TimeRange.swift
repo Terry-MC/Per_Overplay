@@ -210,11 +210,15 @@ public enum UsageMath {
                 promptTokens: 0,
                 completionTokens: 0,
                 reasoningTokens: 0,
+                cachedTokens: 0,
                 requests: 0,
                 cost: 0,
                 byokCost: 0,
                 promptAvailable: false,
                 completionAvailable: false,
+                reasoningAvailable: false,
+                cachedAvailable: false,
+                requestsAvailable: false,
                 costAvailable: false,
                 byokAvailable: false,
                 lastUpdated: record.updatedAt,
@@ -230,9 +234,15 @@ public enum UsageMath {
             }
             if let reasoning = record.reasoningTokens {
                 usage.reasoningTokens += reasoning
+                usage.reasoningAvailable = true
+            }
+            if let cached = record.cachedTokens {
+                usage.cachedTokens += cached
+                usage.cachedAvailable = true
             }
             if let requests = record.requests {
                 usage.requests += requests
+                usage.requestsAvailable = true
             }
             if let cost = record.cost {
                 usage.cost += cost
@@ -272,11 +282,15 @@ public struct ModelUsage: Identifiable, Equatable {
     public var promptTokens: Int
     public var completionTokens: Int
     public var reasoningTokens: Int
+    public var cachedTokens: Int
     public var requests: Int
     public var cost: Decimal
     public var byokCost: Decimal
     public var promptAvailable: Bool
     public var completionAvailable: Bool
+    public var reasoningAvailable: Bool
+    public var cachedAvailable: Bool
+    public var requestsAvailable: Bool
     public var costAvailable: Bool
     public var byokAvailable: Bool
     public var lastUpdated: Date

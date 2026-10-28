@@ -50,6 +50,12 @@ struct SettingsView: View {
                             .monospacedDigit()
                             .frame(width: 96, alignment: .trailing)
                     }
+                    .disabled(model.isDemo)
+                }
+                if model.isDemo {
+                    Text("演示模式仅修改当前内存演示设置，不影响真实配置。")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
                 }
                 Divider()
                 Toggle(isOn: Binding(

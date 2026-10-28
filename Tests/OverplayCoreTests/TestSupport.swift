@@ -25,8 +25,8 @@ enum TestClock {
 
 final class FakeHTTPTransport: HTTPTransport {
     private var queue: [Result<HTTPResponse, HTTPTransportError>]
-    private(set) var requests: [HTTPRequest] = []
-    private let lock = NSLock()
+    private var seen: [HTTPRequest] = []
+    private let syncQueue = DispatchQueue(label: "overplay.tests.fake-transport")
 
     init(_ queue: [Result<HTTPResponse, HTTPTransportError>]) {
         self.queue = queue
@@ -40,17 +40,20 @@ final class FakeHTTPTransport: HTTPTransport {
         self.init([Result<HTTPResponse, HTTPTransportError>]())
     }
 
+    var requests: [HTTPRequest] {
+        syncQueue.sync { seen }
+    }
+
     var requestCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return requests.count
+        syncQueue.sync { seen.count }
     }
 
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
-        lock.lock()
-        requests.append(request)
-        let next = queue.isEmpty ? nil : queue.removeFirst()
-        lock.unlock()
+        let next: Result<HTTPResponse, HTTPTransportError>? = syncQueue.sync {
+            seen.append(request)
+            guard !queue.isEmpty else { return nil }
+            return queue.removeFirst()
+        }
         guard let next else {
             throw HTTPTransportError.other("测试响应已耗尽")
         }
