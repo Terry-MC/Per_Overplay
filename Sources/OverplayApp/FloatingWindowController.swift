@@ -112,6 +112,7 @@ final class FloatingWindowController: NSObject, NSWindowDelegate {
         state.width = frame.width
         state = state.clamped(to: visible)
         frame = state.frame()
+        frame.size.height = state.effectiveHeight(in: visible)
         isAdjustingFrame = true
         panel.setFrame(frame, display: true, animate: false)
         isAdjustingFrame = false
@@ -138,7 +139,10 @@ final class FloatingWindowController: NSObject, NSWindowDelegate {
         panel.delegate = self
         hosting = NSHostingView(rootView: makeRootView())
         panel.contentView = hosting
-        panel.setContentSize(NSSize(width: state.width, height: state.height()))
+        panel.setContentSize(NSSize(
+            width: state.width,
+            height: state.effectiveHeight(in: targetScreen.visibleFrame)
+        ))
         restoreToVisibleFrame()
     }
 
@@ -185,8 +189,10 @@ final class FloatingWindowController: NSObject, NSWindowDelegate {
     private func restoreToVisibleFrame() {
         let visible = targetScreen.visibleFrame
         state = state.clamped(to: visible)
+        var frame = state.frame()
+        frame.size.height = state.effectiveHeight(in: visible)
         isAdjustingFrame = true
-        panel.setFrame(state.frame(), display: true)
+        panel.setFrame(frame, display: true)
         isAdjustingFrame = false
     }
 
@@ -224,7 +230,7 @@ final class FloatingWindowController: NSObject, NSWindowDelegate {
             max(frameSize.width, FloatingWindowState.widthRange.lowerBound),
             min(FloatingWindowState.widthRange.upperBound, visible.width)
         )
-        return NSSize(width: width, height: state.height())
+        return NSSize(width: width, height: state.effectiveHeight(in: visible))
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {

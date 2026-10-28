@@ -61,6 +61,14 @@ public struct FloatingWindowState: Codable, Equatable, Sendable {
         return CGRect(x: x, y: y, width: width, height: resolvedHeight)
     }
 
+    public func effectiveHeight(
+        in visibleFrame: CGRect,
+        expanded: Double = heights.expanded,
+        compact: Double = heights.compact
+    ) -> Double {
+        min(height(expanded: expanded, compact: compact), max(visibleFrame.height, 0))
+    }
+
     /// Keep the complete window inside the visible frame. If a persisted frame
     /// was on a disconnected display, move it to the main screen's visible area.
     public func clamped(

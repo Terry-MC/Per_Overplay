@@ -51,6 +51,24 @@ final class FloatingWindowStateTests: XCTestCase {
         XCTAssertEqual(clamped.width, 420)
     }
 
+    func testEffectiveHeightNeverExceedsVisibleFrame() {
+        let expanded = FloatingWindowState(x: 0, y: 0, density: .expanded)
+        XCTAssertEqual(
+            expanded.effectiveHeight(in: CGRect(x: 0, y: 0, width: 800, height: 400)),
+            400
+        )
+        XCTAssertEqual(
+            expanded.effectiveHeight(in: CGRect(x: 0, y: 0, width: 800, height: 700)),
+            560
+        )
+        var compact = expanded
+        compact.density = .compact
+        XCTAssertEqual(
+            compact.effectiveHeight(in: CGRect(x: 0, y: 0, width: 800, height: 200)),
+            200
+        )
+    }
+
     func testClampKeepsStateOnSecondaryDisplay() {
         let secondary = CGRect(x: -1512, y: 458, width: 1512, height: 950)
         let state = FloatingWindowState(
