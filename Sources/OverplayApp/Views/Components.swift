@@ -89,6 +89,7 @@ struct MetricCard: View {
     var footnote: String?
     var symbol: String
     var isDemo: Bool
+    var emptyText: String = "无数据"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -113,9 +114,11 @@ struct MetricCard: View {
                     }
                 }
                 if valueLines.isEmpty {
-                    Text("无数据")
+                    Text(emptyText)
                         .font(.system(size: 21, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                 }
             }
             if let footnote {

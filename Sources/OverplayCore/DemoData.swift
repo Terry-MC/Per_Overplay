@@ -99,6 +99,10 @@ public enum DemoData {
                 ))
             }
         }
+        // 与 OpenRouter /activity 的真实窗口保持一致：仅最近 30 个完整 UTC 日，不含今天。
+        let utcToday = CalendarDay.string(for: now, timeZone: CalendarDay.utc, calendar: calendar)
+        usage = usage.filter { $0.day != utcToday }
+
         try store.upsertUsage(usage, accountName: demoOpenRouter.displayName)
 
         let monthSpend = try store.monthSpend(

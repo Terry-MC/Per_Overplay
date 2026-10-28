@@ -58,6 +58,7 @@ struct UsageView: View {
                 if costSeries.isEmpty {
                     emptyChart("没有可绘制的费用数据。缺失数据不会以 0 补齐。")
                 } else {
+                    let allDays = CalendarDay.days(from: model.currentRange)
                     Chart(costSeries) { point in
                         BarMark(
                             x: .value("日期", point.day),
@@ -65,8 +66,9 @@ struct UsageView: View {
                         )
                         .foregroundStyle(by: .value("厂商", point.provider))
                     }
+                    .chartXScale(domain: allDays)
                     .chartXAxis {
-                        AxisMarks(values: axisDayValues(costSeries.map(\.day))) { value in
+                        AxisMarks(values: axisDayValues(allDays)) { value in
                             AxisGridLine()
                             AxisTick()
                             AxisValueLabel {
@@ -87,9 +89,14 @@ struct UsageView: View {
                         }
                     }
                     .frame(height: 230)
-                    Text("来源：OpenRouter 官方 activity（其余厂商未提供费用）。仅绘制有数据的日期。")
+                    Text("来源：OpenRouter 官方 activity（其余厂商未提供费用）。图表保留所选范围的所有日期；无数据日期为空，不补 0。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if !costSeries.contains(where: { $0.day == model.currentRange.endDay }) {
+                        Text("\(model.currentRange.endDay)（UTC）无数据：图表保留该日期空白，下一 UTC 日回填。")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
 
@@ -101,6 +108,7 @@ struct UsageView: View {
                 if tokenSeries.isEmpty {
                     emptyChart("厂商未提供 token 历史。DeepSeek 无历史用量接口；缺失数据不显示为 0。")
                 } else {
+                    let allDays = CalendarDay.days(from: model.currentRange)
                     Chart {
                         ForEach(tokenSeries) { point in
                             if point.promptAvailable {
@@ -121,8 +129,9 @@ struct UsageView: View {
                             }
                         }
                     }
+                    .chartXScale(domain: allDays)
                     .chartXAxis {
-                        AxisMarks(values: axisDayValues(tokenSeries.map(\.day))) { value in
+                        AxisMarks(values: axisDayValues(allDays)) { value in
                             AxisGridLine()
                             AxisTick()
                             AxisValueLabel {
@@ -136,6 +145,11 @@ struct UsageView: View {
                     Text("图表仅绘制 Prompt / Completion；Reasoning 属于 completion 子集、Cached 属于 prompt 子集，厂商单列，不重复计入总量。明细与模型表展示全部字段；OpenRouter 用量窗口约 30 个 UTC 日。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if !tokenSeries.contains(where: { $0.day == model.currentRange.endDay }) {
+                        Text("\(model.currentRange.endDay)（UTC）无数据：图表保留该日期空白，下一 UTC 日回填。")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
 

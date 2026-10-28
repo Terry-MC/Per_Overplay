@@ -250,11 +250,13 @@ struct QuotaView: View {
         let ratio = model.budgetRatio(for: account)
         let remaining = model.budgetRemaining(for: account)
         let forecast = model.budgetForecast(for: account)
+        let month = CalendarDay.monthRange(now: model.now)
+        let analysisRange = model.currentRange
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label("本地预算", systemImage: "target")
                     .font(.subheadline.weight(.semibold))
-                Text("按自然月 · 本地预算，不冒充官方额度")
+                Text("按本机自然月 · 本地预算，不冒充官方额度")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -316,7 +318,7 @@ struct QuotaView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    Text("本月已用按 OpenRouter UTC 日桶统计，可能不含今天，且仅覆盖接口约 30 天窗口；数据不完整时不触发预算告警。")
+                    Text("本月已用按本机自然月 \(month.range.startDay) 至 \(month.range.endDay) 的 OpenRouter UTC 日桶统计，可能不含今天且仅覆盖约 30 天窗口；不完整时不触发预算告警。")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -344,11 +346,63 @@ struct QuotaView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
+                Divider()
+                selectedRangeSection(
+                    account: account,
+                    budget: budget,
+                    analysisRange: analysisRange,
+                    month: month
+                )
             } else {
                 Text("未设置预算。设置后可查看使用率与 80% / 100% 告警；预算仅为本机设置。")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+
+    private func selectedRangeSection(
+        account: Account,
+        budget: Budget,
+        analysisRange: DayRange,
+        month: (monthKey: String, range: DayRange)
+    ) -> some View {
+        let selectedRecords = model.usageRecords.filter {
+            $0.accountId == account.id
+                && analysisRange.contains($0.day)
+                && $0.currency == budget.currency
+        }
+        let selectedCosts = selectedRecords.compactMap(\.cost)
+        let selectedCostText: String
+        if selectedRecords.isEmpty {
+            selectedCostText = "无数据"
+        } else if selectedCosts.isEmpty {
+            selectedCostText = "费用未提供"
+        } else {
+            selectedCostText = Money.formatCost(
+                selectedCosts.reduce(Decimal(0), +),
+                currency: budget.currency
+            )
+        }
+        return VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                Label("所选分析范围", systemImage: "calendar")
+                    .font(.caption.weight(.semibold))
+                Text(analysisRange.label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("该账户费用：\(selectedCostText)")
+                    .font(.caption.weight(.semibold))
+            }
+            Text("仅统计上述时间段内已同步的 OpenRouter 厂商 UTC 日桶，不参与本地月度预算和告警。")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text("本地预算周期：本机自然月 \(month.range.startDay) 至 \(month.range.endDay)；发生跨月时不会把所选范围当作预算周期。")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 

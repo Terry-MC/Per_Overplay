@@ -15,6 +15,11 @@ final class DemoDataTests: XCTestCase {
         let usage = try store.usage()
         XCTAssertFalse(usage.isEmpty)
         XCTAssertTrue(usage.allSatisfy { $0.source.contains("演示") })
+        let utcToday = CalendarDay.string(
+            for: now, timeZone: CalendarDay.utc, calendar: TestClock.calendar
+        )
+        XCTAssertFalse(usage.contains { $0.day == utcToday },
+                       "演示数据应模拟 OpenRouter 的真实窗口：不含今天")
         XCTAssertTrue(usage.compactMap(\.cost).reduce(Decimal(0), +) > 0)
 
         let alerts = try store.alerts()

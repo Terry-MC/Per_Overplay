@@ -14,9 +14,10 @@ struct OverviewView: View {
                 MetricCard(
                     title: "今日费用",
                     valueLines: model.todayCosts.isEmpty ? [] : UIFormat.costLines(model.todayCosts),
-                    footnote: "按厂商 UTC 日桶统计；无数据时不显示 0。",
+                    footnote: todayFootnote,
                     symbol: "sun.max",
-                    isDemo: model.isDemo
+                    isDemo: model.isDemo,
+                    emptyText: todayEmptyText
                 )
                 MetricCard(
                     title: "本月至今费用",
@@ -51,7 +52,7 @@ struct OverviewView: View {
                 MetricCard(
                     title: "本地预算剩余",
                     valueLines: budgetRemainingLines,
-                    footnote: "同币种账户净额，可能含超支账户抵扣；本地预算与官方 credits 分开，无完整数据时不计算。",
+                    footnote: "同币种账户净额，可能含超支账户抵扣；本地预算按本机自然月，与用量页所选范围分开；无完整数据不计算。",
                     symbol: "target",
                     isDemo: model.isDemo
                 )
@@ -86,6 +87,21 @@ struct OverviewView: View {
 
             alertsSection
         }
+    }
+
+    private var hasOpenRouter: Bool {
+        model.accounts.contains { $0.provider == .openrouter }
+    }
+
+    private var todayEmptyText: String {
+        model.todayCosts.isEmpty && hasOpenRouter ? "厂商窗口不含今天" : "无数据"
+    }
+
+    private var todayFootnote: String {
+        if model.todayCosts.isEmpty && hasOpenRouter {
+            return "OpenRouter 仅提供最近 30 个完整 UTC 日，今日数据在下一 UTC 日回填；不以 0 代替。"
+        }
+        return "按厂商 UTC 日桶统计；无数据时不显示 0。"
     }
 
     private var tokenLines: [(String, String?)] {
@@ -420,7 +436,7 @@ struct BudgetSummaryView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 HStack {
-                    Text("本月已用 · 按厂商日桶，可能不含今天")
+                    Text("本月已用 · 本机自然月 · 厂商日桶可能不含今天")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     Spacer()
