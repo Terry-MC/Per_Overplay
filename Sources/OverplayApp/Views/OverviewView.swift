@@ -10,8 +10,12 @@ struct OverviewView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            if !model.balanceAccounts.isEmpty {
-                balanceAccountPicker
+            if !model.accounts.isEmpty {
+                platformFilterBar
+                if let platform = model.overviewPlatformFilter,
+                   model.overviewPlatformAccounts.count > 1 {
+                    accountFilterChips(platform: platform)
+                }
             }
             LazyVGrid(columns: metricColumns, alignment: .leading, spacing: 14) {
                 MetricCard(
@@ -20,29 +24,32 @@ struct OverviewView: View {
                     footnote: todayFootnote,
                     symbol: "sun.max",
                     isDemo: model.isDemo,
-                    emptyText: todayEmptyText
+                    status: model.costDataStatus(forToday: true).prefixed("今日费用")
                 )
                 MetricCard(
                     title: "本月至今费用",
                     valueLines: model.monthCosts.isEmpty ? [] : UIFormat.costLines(model.monthCosts),
                     footnote: "自然月按本机时区；按厂商日桶聚合，分币种展示，不跨币种求和。",
                     symbol: "calendar",
-                    isDemo: model.isDemo
+                    isDemo: model.isDemo,
+                    status: model.costDataStatus(forToday: false).prefixed("本月费用")
                 )
                 MetricCard(
                     title: "近 30 天 tokens",
                     valueLines: tokenLines,
                     footnote: tokenFootnote,
                     symbol: "number",
-                    isDemo: model.isDemo
+                    isDemo: model.isDemo,
+                    status: model.tokenDataStatus().prefixed("tokens")
                 )
                 MetricCard(
                     title: "官方额度剩余",
                     valueLines: model.officialCreditsRemaining.isEmpty
                         ? [] : UIFormat.costLines(model.officialCreditsRemaining),
-                    footnote: "OpenRouter credits（官方）· total_credits − total_usage。",
+                    footnote: "厂商官方额度（total_credits − total_usage），非本地预算；演示平台为虚拟额度。",
                     symbol: "gauge.with.dots.needle.50percent",
-                    isDemo: model.isDemo
+                    isDemo: model.isDemo,
+                    status: model.creditDataStatus().prefixed("官方额度")
                 )
                 MetricCard(
                     title: "官方余额",
@@ -51,24 +58,45 @@ struct OverviewView: View {
                     footnote: officialBalanceFootnote,
                     symbol: "creditcard",
                     isDemo: model.isDemo,
-                    emptyText: model.selectedBalanceAccount == nil ? "无数据" : "该账户暂无余额"
+                    status: officialBalanceStatus,
+                    accessory: model.showsBalanceCurrencyPicker
+                        ? AnyView(officialBalanceCurrencyPicker)
+                        : nil
                 )
                 MetricCard(
                     title: "本地预算剩余",
                     valueLines: budgetRemainingLines,
                     footnote: "同币种账户净额，可能含超支账户抵扣；本地预算按本机自然月，与用量页所选范围分开；无完整数据不计算。",
                     symbol: "target",
-                    isDemo: model.isDemo
+                    isDemo: model.isDemo,
+                    status: model.budgetRemainingDataStatus().prefixed("本地预算")
                 )
             }
+            HStack(spacing: 14) {
+                Label("空状态：无数据 / 厂商未提供，不显示 0", systemImage: "tray")
+                Label("橙色警告：该卡片数据异常，悬浮查看具体原因", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Spacer()
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("账户")
+                    Text(model.overviewPlatformFilter.map { "\($0.displayName) 账户" } ?? "账户")
                         .font(.title3.weight(.semibold))
-                    Text("\(model.accounts.count)")
+                    Text("\(model.overviewAccountsToShow.count)")
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                    if let selected = model.selectedOverviewAccount {
+                        Text("仅显示 \(selected.displayName)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if let platform = model.overviewPlatformFilter {
+                        Text("仅显示 \(platform.displayName) 平台")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     Spacer()
                     if !model.accounts.isEmpty {
                         Button {
@@ -79,13 +107,19 @@ struct OverviewView: View {
                         .disabled(model.isDemo)
                     }
                 }
-                ForEach(model.accounts) { account in
-                    AccountCardView(
-                        model: model,
-                        account: account,
-                        onEdit: { onEdit(account) },
-                        onDelete: { onDelete(account) }
-                    )
+                if model.overviewAccountsToShow.isEmpty {
+                    Text("该平台暂无账户。")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(model.overviewAccountsToShow) { account in
+                        AccountCardView(
+                            model: model,
+                            account: account,
+                            onEdit: { onEdit(account) },
+                            onDelete: { onDelete(account) }
+                        )
+                    }
                 }
             }
 
@@ -93,54 +127,186 @@ struct OverviewView: View {
         }
     }
 
-    private var balanceAccountPicker: some View {
-        HStack(spacing: 10) {
-            Label("官方余额账户", systemImage: "creditcard")
-                .font(.caption.weight(.semibold))
+    private var platformFilterBar: some View {
+        let presentProviders = ProviderKind.allCases.filter { provider in
+            model.accounts.contains { $0.provider == provider }
+        }
+        return HStack(spacing: 10) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    platformButton(nil, title: "All", symbol: "square.grid.2x2")
+                    ForEach(presentProviders) { provider in
+                        platformButton(for: provider)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(model.overviewPlatformFilter.map { "仅显示 \($0.displayName) 平台" } ?? "全部 AI 平台汇总")
+                .font(.caption)
                 .foregroundStyle(.secondary)
-            Picker("官方余额账户", selection: $model.balanceAccountFilter) {
-                Text("全部 DeepSeek 账户").tag(String?.none)
-                ForEach(model.balanceAccounts) { account in
-                    Text("\(account.displayName) · \(model.currencyLabel(for: account))")
-                        .tag(Optional(account.id))
+                .fixedSize()
+        }
+        .padding(6)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+
+    private func platformButton(for provider: ProviderKind) -> some View {
+        let style = providerStyle(for: provider)
+        return platformButton(provider, title: provider.displayName, letter: style.abbreviation, color: style.color)
+    }
+
+    private func accountFilterChips(platform: ProviderKind) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                accountChip(nil, title: "全部 \(platform.displayName) 账户")
+                ForEach(model.overviewPlatformAccounts) { account in
+                    accountChip(account.id, title: account.displayName)
+                }
+            }
+        }
+    }
+
+    private func accountChip(_ accountId: String?, title: String) -> some View {
+        let selected = model.overviewAccountFilter == accountId
+        return Button {
+            model.overviewAccountFilter = accountId
+        } label: {
+            Text(title)
+                .font(.caption.weight(selected ? .semibold : .regular))
+                .foregroundStyle(selected ? Color.accentColor : .secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule().fill(selected ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08))
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func platformButton(
+        _ platform: ProviderKind?,
+        title: String,
+        symbol: String? = nil,
+        letter: String? = nil,
+        color: Color = .accentColor
+    ) -> some View {
+        let selected = model.overviewPlatformFilter == platform
+        return Button {
+            model.overviewPlatformFilter = platform
+        } label: {
+            HStack(spacing: 6) {
+                if let symbol {
+                    Image(systemName: symbol)
+                        .font(.caption)
+                } else if let letter {
+                    Text(letter)
+                        .font(.system(size: letter.count > 1 ? 7 : 9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 18, height: 18)
+                        .background(Circle().fill(color))
+                }
+                Text(title)
+                    .fixedSize()
+            }
+            .font(.subheadline.weight(selected ? .semibold : .regular))
+            .foregroundStyle(selected ? Color.accentColor : .secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                Capsule().fill(selected ? Color.accentColor.opacity(0.12) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private var officialBalanceCurrencyPicker: some View {
+        if model.showsBalanceCurrencyPicker {
+            Picker("币种", selection: $model.balanceCurrencyFilter) {
+                ForEach(model.availableBalanceCurrencies, id: \.self) { code in
+                    Text("\(Money.symbol(for: code)) \(code)")
+                        .tag(Optional(code))
                 }
             }
             .pickerStyle(.menu)
             .labelsHidden()
-            .frame(width: 260)
-            if let account = model.selectedBalanceAccount {
-                Text("当前仅显示该账户的 \(model.currencyLabel(for: account)) 余额")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("按币种分开，不跨币种求和")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
+            .controlSize(.small)
+            .fixedSize()
+            .help("币种选项来自 DeepSeek /user/balance 实际返回的数据；仅在多个真实币种时显示")
         }
+    }
+
+    private var canSwitchBalanceCurrency: Bool {
+        model.showsBalanceCurrencyPicker
     }
 
     private var officialBalanceFootnote: String {
-        if let account = model.selectedBalanceAccount {
-            return "仅显示 \(account.displayName)（\(model.currencyLabel(for: account))）的官方余额；不同币种账户分开统计。"
+        if let selected = model.selectedOverviewAccount, !selected.provider.capabilities.balance {
+            return "所选账户为 \(selected.provider.displayName)，不提供官方余额。"
         }
-        return "DeepSeek 各账户按币种分开展示，不跨币种求和；可在上方选择单个账户查看。"
+        if let platform = model.overviewPlatformFilter, !platform.capabilities.balance {
+            return "\(platform.displayName) 平台不提供官方余额。"
+        }
+        if let code = model.balanceCurrencyFilter {
+            if model.showsBalanceCurrencyPicker {
+                return "当前仅显示 \(Money.symbol(for: code)) \(code) 的官方余额（来自 /user/balance 实际返回）；可在卡片内切换币种。"
+            }
+            return "当前仅显示 \(Money.symbol(for: code)) \(code) 的官方余额（来自 /user/balance 实际返回）。"
+        }
+        return "选择 DeepSeek 平台或账户查看官方余额；只有实际返回多个币种时才显示币种切换。"
     }
 
-    private var hasOpenRouter: Bool {
-        model.accounts.contains { $0.provider == .openrouter }
-    }
-
-    private var todayEmptyText: String {
-        model.todayCosts.isEmpty && hasOpenRouter ? "厂商窗口不含今天" : "无数据"
+    private var officialBalanceStatus: DataStatus {
+        if let selected = model.selectedOverviewAccount {
+            if !selected.provider.capabilities.balance {
+                return .unavailable("所选账户为 \(selected.provider.displayName)，不提供官方余额")
+                    .prefixed("官方余额")
+            }
+            let status = model.balanceDataStatus(for: selected)
+            if status.isActual,
+               let code = model.balanceCurrencyFilter,
+               model.officialBalances.isEmpty {
+                return .missing("当前筛选的 \(Money.symbol(for: code)) \(code) 暂无余额数据")
+                    .prefixed("官方余额")
+            }
+            return status.prefixed("官方余额")
+        }
+        if let platform = model.overviewPlatformFilter, !platform.capabilities.balance {
+            return .unavailable("\(platform.displayName) 平台不提供官方余额")
+                .prefixed("官方余额")
+        }
+        let status = model.balanceDataStatus(for: nil)
+        if status.isActual,
+           let code = model.balanceCurrencyFilter,
+           model.officialBalances.isEmpty {
+            return .missing("当前筛选的 \(Money.symbol(for: code)) \(code) 暂无余额数据")
+                .prefixed("官方余额")
+        }
+        return status.prefixed("官方余额")
     }
 
     private var todayFootnote: String {
-        if model.todayCosts.isEmpty && hasOpenRouter {
-            return "OpenRouter 仅提供最近 30 个完整 UTC 日，今日数据在下一 UTC 日回填；不以 0 代替。"
+        switch model.costDataStatus(forToday: true) {
+        case .actual:
+            return "按厂商 UTC 日桶统计；0 为实际零消费。"
+        case .missing(let reason),
+             .unavailable(let reason),
+             .partial(let reason),
+             .failed(let reason),
+             .anomaly(let reason):
+            return reason
         }
-        return "按厂商 UTC 日桶统计；无数据时不显示 0。"
     }
 
     private var tokenLines: [(String, String?)] {
@@ -152,18 +318,27 @@ struct OverviewView: View {
     private var tokenFootnote: String {
         let summary = model.tokenSummary
         if summary.providersWithTokens == 0 {
-            return "厂商未提供 token 数据；不将缺失数据当作 0。"
+            switch model.tokenDataStatus() {
+            case .actual:
+                return "所选范围没有 token 记录。"
+            case .missing(let reason),
+                 .unavailable(let reason),
+                 .partial(let reason),
+                 .failed(let reason),
+                 .anomaly(let reason):
+                return reason
+            }
         }
         return "覆盖 \(summary.providersWithTokens) / \(summary.totalAccounts) 个账户；仅含提供实际 token 数据的厂商。"
     }
 
     private var budgetRemainingLines: [(String, String?)] {
-        var totals: [String: Decimal] = [:]
-        for account in model.accounts {
-            guard let budget = account.budget,
-                  let remaining = model.budgetRemaining(for: account) else { continue }
-            totals[budget.currency, default: 0] += remaining
-        }
+        let (_, range) = CalendarDay.monthRange(now: model.now)
+        let totals = DashboardMetrics.budgetRemaining(
+            accounts: model.overviewAccountsToShow,
+            records: model.usageRecords,
+            range: range
+        )
         return totals.keys.sorted().map { code in
             let value = totals[code] ?? 0
             if value < 0 {
@@ -173,40 +348,8 @@ struct OverviewView: View {
         }
     }
 
-    @ViewBuilder
     private var alertsSection: some View {
-        SectionCard(
-            title: "告警",
-            subtitle: model.unacknowledgedAlerts.isEmpty ? "无未确认告警" : "\(model.unacknowledgedAlerts.count) 条未确认",
-            isDemo: model.isDemo
-        ) {
-            if model.unacknowledgedAlerts.isEmpty {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle")
-                        .foregroundStyle(.green)
-                    Text("当前没有未确认的告警。预算 / 余额 / 同步异常会记录在此。")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                ForEach(model.unacknowledgedAlerts.prefix(4)) { alert in
-                    AlertRowView(
-                        alert: alert,
-                        isDemo: model.isDemo,
-                        onAcknowledge: { model.acknowledge(alert) }
-                    )
-                    if alert.id != model.unacknowledgedAlerts.prefix(4).last?.id {
-                        Divider()
-                    }
-                }
-                if model.unacknowledgedAlerts.count > 4 {
-                    Button("查看全部告警") {
-                        model.selectedTab = .quota
-                    }
-                    .buttonStyle(.link)
-                }
-            }
-        }
+        MessageCenterEntryCard(model: model)
     }
 }
 
@@ -288,34 +431,45 @@ struct AccountCardView: View {
 
     @ViewBuilder
     private var metrics: some View {
-        switch account.provider {
-        case .deepseek:
+        if account.provider.capabilities.balance {
             deepSeekMetrics
-        case .openrouter:
+        } else {
             openRouterMetrics
         }
+    }
+
+    private var quotaMetricTitle: String {
+        account.provider == .openrouter ? "credits 剩余" : "额度剩余"
     }
 
     @ViewBuilder
     private var deepSeekMetrics: some View {
         let balances = model.latestBalances(for: account)
+        let status = model.balanceDataStatus(for: account).prefixed("官方余额")
         if balances.isEmpty {
-            HStack {
-                Image(systemName: "tray")
+            VStack(alignment: .leading, spacing: 4) {
+                Text("官方余额 · \(model.currencyLabel(for: account))")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-                Text(health == .neverSynced ? "尚未同步。添加后可自动测试余额接口。" : "厂商未提供余额数据。")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                DataValueLabel(
+                    text: "无数据",
+                    status: status,
+                    font: .system(size: 25, weight: .semibold, design: .rounded)
+                )
+                statusMessage(status)
             }
         } else {
             ForEach(balances) { balance in
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("官方余额")
+                        Text("官方余额 · \(balance.currency)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text(Money.formatBalance(balance.total, currency: balance.currency))
-                            .font(.system(size: 25, weight: .semibold, design: .rounded))
+                        DataValueLabel(
+                            text: Money.formatBalance(balance.total, currency: balance.currency),
+                            status: status,
+                            font: .system(size: 25, weight: .semibold, design: .rounded)
+                        )
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         if let granted = balance.granted {
@@ -329,12 +483,32 @@ struct AccountCardView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     Spacer()
-                    thresholdStatus(for: balance)
+                    if status.isActual {
+                        thresholdStatus(for: balance)
+                    }
                 }
+            }
+            if !status.isActual {
+                statusMessage(status)
             }
             Text("余额快照，非逐请求 token 统计；DeepSeek 官方不提供历史用量 / 费用。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func statusMessage(_ status: DataStatus) -> some View {
+        switch status {
+        case .actual:
+            EmptyView()
+        case .missing(let reason), .unavailable(let reason):
+            Text(reason)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        case .partial(let reason), .failed(let reason), .anomaly(let reason):
+            AnomalyNotice(message: reason)
         }
     }
 
@@ -359,19 +533,23 @@ struct AccountCardView: View {
     @ViewBuilder
     private var openRouterMetrics: some View {
         let quota = model.latestQuota(for: account)
+        let status = model.creditDataStatus(for: account).prefixed(quotaMetricTitle)
         if let quota {
             HStack(alignment: .firstTextBaseline, spacing: 18) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("credits 剩余")
+                    Text(quotaMetricTitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text(Money.formatBalance(quota.remaining, currency: quota.currency))
-                        .font(.system(size: 25, weight: .semibold, design: .rounded))
+                    DataValueLabel(
+                        text: Money.formatBalance(quota.remaining, currency: quota.currency),
+                        status: status,
+                        font: .system(size: 25, weight: .semibold, design: .rounded)
+                    )
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text("总额 \(Money.formatBalance(quota.totalCredits, currency: quota.currency))")
                     Text("已用 \(Money.formatBalance(quota.totalUsage, currency: quota.currency))")
-                    if let percent = quota.usagePercent {
+                    if status.isActual, let percent = quota.usagePercent {
                         Text("使用率 \(Money.percent(percent))")
                     }
                 }
@@ -379,21 +557,28 @@ struct AccountCardView: View {
                 .foregroundStyle(.secondary)
                 Spacer()
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text("官方 credits")
+                    Text("官方额度")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     Text(UIFormat.compactDate(quota.asOf))
                         .font(.caption)
                 }
             }
+            if !status.isActual {
+                statusMessage(status)
+            }
             BudgetSummaryView(model: model, account: account)
         } else {
-            HStack {
-                Image(systemName: "tray")
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(quotaMetricTitle) · \(model.currencyLabel(for: account))")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-                Text(health == .neverSynced ? "尚未同步 credits。" : "暂未获取到 credits。")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                DataValueLabel(
+                    text: "无数据",
+                    status: status,
+                    font: .system(size: 25, weight: .semibold, design: .rounded)
+                )
+                statusMessage(status)
             }
         }
     }
@@ -415,7 +600,7 @@ struct AccountCardView: View {
                     .foregroundStyle(.secondary)
             }
         } label: {
-            Label("查看错误详情", systemImage: "exclamationmark.triangle")
+            Label("数据异常 · 查看详情", systemImage: "exclamationmark.triangle")
                 .font(.caption)
                 .foregroundStyle(account.credentialInvalid ? Color.red : Color.orange)
         }
@@ -453,6 +638,7 @@ struct BudgetSummaryView: View {
             let spend = model.budgetSpend(for: account)
             let ratio = model.budgetRatio(for: account)
             let remaining = model.budgetRemaining(for: account)
+            let spendStatus = model.budgetSpendDataStatus(for: account).prefixed("本月已用")
             VStack(alignment: .leading, spacing: 7) {
                 HStack {
                     Text("本地预算")
@@ -469,17 +655,22 @@ struct BudgetSummaryView: View {
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(ratio >= 100 ? .red : ratio >= 80 ? .orange : .green)
                     } else {
-                        Text("本月已用暂无完整数据")
+                        Text("已用")
                             .font(.caption)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.secondary)
+                        DataValueLabel(
+                            text: "无数据",
+                            status: spendStatus,
+                            font: .caption.weight(.semibold)
+                        )
                     }
                 }
                 if let ratio {
                     BudgetProgressBar(ratio: ratio, isDemo: model.isDemo)
                 } else {
-                    Text("activity 尚未成功同步或部分失败；不显示为 0，也不计算使用率 / 剩余 / 预估。")
+                    Text(spendStatus.reason ?? "本月用量数据不完整，不计算使用率 / 剩余 / 预估。")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(spendStatus.isActual ? Color.secondary : Color.orange)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 HStack {

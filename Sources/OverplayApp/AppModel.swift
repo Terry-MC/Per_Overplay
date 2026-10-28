@@ -31,18 +31,7 @@ enum DashboardTab: String, CaseIterable, Identifiable {
     }
 }
 
-enum BannerStyle {
-    case info
-    case success
-    case warning
-    case error
-}
-
-struct Banner: Identifiable, Equatable {
-    let id = UUID()
-    var style: BannerStyle
-    var message: String
-}
+typealias BannerStyle = NoticeStyle
 
 struct DailyCostPoint: Identifiable, Equatable {
     var day: String
@@ -95,7 +84,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var isDemo = false
     @Published private(set) var syncingAccountIds: Set<String> = []
     @Published private(set) var now = Date()
-    @Published private(set) var banner: Banner?
+    @Published private(set) var toasts: [ToastMessage] = []
     @Published private(set) var notificationStatus: UNAuthorizationStatus = .notDetermined
     @Published private(set) var initializationWarning: String?
     @Published private(set) var showOnboarding = false
@@ -109,9 +98,17 @@ final class AppModel: ObservableObject {
         didSet { validateUsageFilters() }
     }
     @Published var usageModelFilter: String?
-    @Published var balanceAccountFilter: String? {
-        didSet { validateBalanceFilter() }
+    @Published var overviewPlatformFilter: ProviderKind? {
+        didSet {
+            overviewAccountFilter = nil
+            ensureBalanceCurrencyFilter()
+        }
     }
+    @Published var overviewAccountFilter: String? {
+        didSet { ensureBalanceCurrencyFilter() }
+    }
+    @Published var balanceCurrencyFilter: String?
+    @Published var showMessageCenter = false
 
     var onStatusChanged: (() -> Void)?
 
@@ -123,7 +120,10 @@ final class AppModel: ObservableObject {
     private var syncEngine: SyncEngine?
     private var transport: URLSessionTransport
     private var timer: Timer?
-    private var bannerDismissTask: Task<Void, Never>?
+    private var toastQueue = ToastQueue(maxVisible: 3)
+    private var toastTasks: [String: Task<Void, Never>] = [:]
+    private var shownAlertIds: Set<String> = []
+    private var hasLoadedAlertHistory = false
     private var connectionTestTask: Task<ConnectionTestResult, Never>?
     private var connectionTestToken = 0
 
@@ -262,15 +262,24 @@ final class AppModel: ObservableObject {
             let range = CalendarDay.range(preset: .ninety, now: now)
             let ids = Set(loadedAccounts.map(\.id))
             usageRecords = try store.usage(range: range).filter { ids.contains($0.accountId) }
+            if let accountId = overviewAccountFilter,
+               !loadedAccounts.contains(where: {
+                   $0.id == accountId && (overviewPlatformFilter == nil || $0.provider == overviewPlatformFilter)
+               }) {
+                overviewAccountFilter = nil
+            }
             let activeIds = Set(loadedAccounts.map(\.id))
-            alerts = try store.alerts().filter { activeIds.contains($0.accountId) }
+            let previousAlertIds = Set(alerts.map(\.id))
+            let loadedAlerts = try store.alerts().filter { activeIds.contains($0.accountId) }
+            alerts = loadedAlerts
+            handleLoadedAlerts(loadedAlerts, previousIds: previousAlertIds)
             if let selectedCurrency,
                !availableCurrencies.isEmpty,
                !availableCurrencies.contains(selectedCurrency) {
                 self.selectedCurrency = nil
             }
             validateUsageFilters()
-            validateBalanceFilter()
+            ensureBalanceCurrencyFilter()
             showOnboarding = !isDemo && loadedAccounts.isEmpty
             now = Date()
         } catch {
@@ -591,10 +600,18 @@ final class AppModel: ObservableObject {
         return Array(Set(records.map(\.model))).sorted()
     }
 
-    private func validateBalanceFilter() {
-        if let balanceAccountFilter,
-           !balanceAccounts.contains(where: { $0.id == balanceAccountFilter }) {
-            self.balanceAccountFilter = nil
+    var overviewScope: OverviewScope {
+        OverviewScope(platform: overviewPlatformFilter, accountId: overviewAccountFilter)
+    }
+
+    private func ensureBalanceCurrencyFilter() {
+        let available = availableBalanceCurrencies
+        let preferred = BalanceCurrencyPolicy.preferred(
+            options: available,
+            current: balanceCurrencyFilter
+        )
+        if balanceCurrencyFilter != preferred {
+            balanceCurrencyFilter = preferred
         }
     }
 
@@ -637,49 +654,71 @@ final class AppModel: ObservableObject {
         return result
     }
 
+    var overviewUsageRecords: [UsageRecord] {
+        let scoped = overviewAccountsToShow.filter { $0.provider.capabilities.usage }
+        return DashboardMetrics.usageRecords(usageRecords, for: scoped)
+    }
+
     var todayCosts: [String: Decimal] {
         let today = CalendarDay.string(for: now, timeZone: CalendarDay.utc)
-        return costs(usageRecords.filter { $0.day == today })
+        return DashboardMetrics.costs(overviewUsageRecords, onDay: today)
     }
 
     var monthCosts: [String: Decimal] {
         let (_, range) = CalendarDay.monthRange(now: now)
-        return costs(usageRecords.filter { range.contains($0.day) })
+        return DashboardMetrics.costs(overviewUsageRecords, in: range)
     }
 
     var tokenSummary: (total: Int, totalAccounts: Int, providersWithTokens: Int) {
         let range = CalendarDay.range(preset: .thirty, now: now)
-        let records = usageRecords.filter { range.contains($0.day) }
-        let total = records.reduce(0) { $0 + ($1.totalTokens ?? 0) }
-        let providers = Set(records.filter { $0.totalTokens != nil }.map(\.accountId)).count
-        return (total, accounts.count, providers)
+        let stats = DashboardMetrics.tokenStats(
+            records: overviewUsageRecords,
+            range: range,
+            totalAccounts: overviewAccountsToShow.count
+        )
+        return (stats.totalTokens, stats.totalAccounts, stats.accountsWithTokens)
     }
 
     var officialCreditsRemaining: [String: Decimal] {
-        var result: [String: Decimal] = [:]
-        for quota in quotas.values {
-            result[quota.currency, default: 0] += quota.remaining
-        }
-        return result
+        let scoped = overviewAccountsToShow.filter { $0.provider.capabilities.credits }
+        return DashboardMetrics.creditsRemaining(accounts: scoped, quotas: quotas)
     }
 
     var balanceAccounts: [Account] {
         accounts.filter { $0.provider == .deepseek }
     }
 
-    var selectedBalanceAccount: Account? {
-        guard let balanceAccountFilter else { return nil }
-        return balanceAccounts.first { $0.id == balanceAccountFilter }
+    var overviewPlatformAccounts: [Account] {
+        overviewScope.platformAccounts(in: accounts)
+    }
+
+    var selectedOverviewAccount: Account? {
+        guard let overviewAccountFilter else { return nil }
+        return accounts.first { $0.id == overviewAccountFilter }
+    }
+
+    var overviewAccountsToShow: [Account] {
+        overviewScope.accounts(in: accounts)
+    }
+
+    var availableBalanceCurrencies: [String] {
+        let scoped = overviewAccountsToShow.filter { $0.provider.capabilities.balance }
+        return DashboardMetrics.balanceCurrencies(accounts: scoped, balances: balances)
+    }
+
+    var showsBalanceCurrencyPicker: Bool {
+        BalanceCurrencyPolicy.shouldShowPicker(options: availableBalanceCurrencies)
     }
 
     var officialBalances: [String: Decimal] {
-        let ids: Set<String>
-        if let balanceAccountFilter {
-            ids = [balanceAccountFilter]
-        } else {
-            ids = Set(balanceAccounts.map(\.id))
-        }
-        return BalanceSummary.totalsByCurrency(balances: balances, accountIds: ids)
+        guard let balanceCurrencyFilter else { return [:] }
+        let scoped = overviewAccountsToShow.filter { $0.provider.capabilities.balance }
+        guard let total = DashboardMetrics.balanceTotal(
+            accounts: scoped,
+            balances: balances,
+            currency: balanceCurrencyFilter
+        ) else { return [:] }
+        return [balanceCurrencyFilter: total]
     }
 
     func balanceCurrencies(for account: Account) -> [String] {
@@ -687,13 +726,173 @@ final class AppModel: ObservableObject {
     }
 
     func currencyLabel(for account: Account) -> String {
-        switch account.provider {
-        case .deepseek:
+        if account.provider.capabilities.balance {
             let currencies = balanceCurrencies(for: account)
-            return currencies.isEmpty ? "币种待同步" : currencies.joined(separator: " / ")
-        case .openrouter:
-            return latestQuota(for: account)?.currency ?? account.provider.defaultCurrency
+            if currencies.isEmpty {
+                return account.lastSuccessAt == nil ? "币种待同步" : "币种未知"
+            }
+            return currencies.joined(separator: " / ")
         }
+        return latestQuota(for: account)?.currency ?? account.provider.defaultCurrency
+    }
+
+    var usageAccounts: [Account] {
+        accounts.filter { $0.provider.capabilities.usage }
+    }
+
+    var creditAccounts: [Account] {
+        accounts.filter { $0.provider.capabilities.credits }
+    }
+
+    var activeDeepSeekAccounts: [Account] {
+        balanceAccounts.filter(\.enabled)
+    }
+
+    func accountAbnormalReason(for account: Account) -> String? {
+        guard account.provider == .deepseek else { return nil }
+        let unavailable = latestBalances(for: account).filter { $0.isAvailable == false }
+        guard !unavailable.isEmpty else { return nil }
+        let codes = unavailable.map(\.currency).sorted().joined(separator: " / ")
+        return "DeepSeek 官方标记 \(codes) 余额不可用；请检查账户状态（欠费、风控或权限）"
+    }
+
+    func dataIssue(for account: Account) -> String? {
+        var reasons: [String] = []
+        if account.credentialInvalid {
+            reasons.append("凭据失效：\(account.lastError ?? "需要重新输入 API Key / Management Key")")
+        } else if let error = account.lastError?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !error.isEmpty {
+            reasons.append("同步失败：\(error)")
+        }
+        if let abnormal = accountAbnormalReason(for: account) {
+            reasons.append("账户异常：\(abnormal)")
+        }
+        return reasons.isEmpty ? nil : reasons.joined(separator: "；")
+    }
+
+    private func usageRecordsStatus(for accounts: [Account], emptyReason: String) -> DataStatus {
+        AccountDataStatus.usage(
+            accounts: accounts,
+            records: usageRecords,
+            emptyReason: emptyReason
+        )
+    }
+
+    private func allUsageDataStatus() -> DataStatus {
+        usageRecordsStatus(
+            for: usageAccounts,
+            emptyReason: "暂无可统计用量 / 费用的账户；DeepSeek 官方不提供历史费用 / 用量接口"
+        )
+    }
+
+    private var scopedUsageAccounts: [Account] {
+        overviewAccountsToShow.filter { $0.provider.capabilities.usage }
+    }
+
+    private func overviewUsageDataStatus() -> DataStatus {
+        if let selectedOverviewAccount, !selectedOverviewAccount.provider.capabilities.usage {
+            return .unavailable("所选账户为 \(selectedOverviewAccount.provider.displayName)，不提供历史费用 / 用量")
+        }
+        if let platform = overviewPlatformFilter, !platform.capabilities.usage {
+            return .unavailable("\(platform.displayName) 平台不提供历史费用 / 用量")
+        }
+        return usageRecordsStatus(
+            for: scopedUsageAccounts,
+            emptyReason: "所选范围暂无可统计用量 / 费用的账户"
+        )
+    }
+
+    func costDataStatus(forToday: Bool) -> DataStatus {
+        let base = overviewUsageDataStatus()
+        guard base.isActual else { return base }
+        let values = forToday ? todayCosts : monthCosts
+        guard values.isEmpty else { return .actual }
+        if forToday {
+            return .missing("厂商活动窗口通常仅覆盖完整 UTC 日，今日数据将在下一 UTC 日回填")
+        }
+        return .missing("本机自然月内暂无费用记录，可能不含今天或超出约 30 天窗口")
+    }
+
+    func tokenDataStatus() -> DataStatus {
+        let base = overviewUsageDataStatus()
+        guard base.isActual else { return base }
+        if tokenSummary.providersWithTokens == 0 {
+            return .missing("所选范围没有可用的 token 数据；部分厂商不提供历史 token，活动窗口约 30 个 UTC 日")
+        }
+        return .actual
+    }
+
+    func creditDataStatus() -> DataStatus {
+        if let selectedOverviewAccount {
+            guard selectedOverviewAccount.provider.capabilities.credits else {
+                return .unavailable("所选账户为 \(selectedOverviewAccount.provider.displayName)，不提供官方额度")
+            }
+            return creditDataStatus(for: selectedOverviewAccount)
+        }
+        if let platform = overviewPlatformFilter, !platform.capabilities.credits {
+            return .unavailable("\(platform.displayName) 平台不提供官方额度")
+        }
+        let scoped = overviewAccountsToShow.filter { $0.provider.capabilities.credits }
+        guard !scoped.isEmpty else {
+            return .missing("所选范围没有提供官方额度的账户")
+        }
+        let statuses = scoped.map {
+            AccountDataStatus.quota(account: $0, quota: latestQuota(for: $0))
+        }
+        return AccountDataStatus.aggregate(statuses, emptyReason: "所选范围没有官方额度数据")
+    }
+
+    func creditDataStatus(for account: Account) -> DataStatus {
+        AccountDataStatus.quota(account: account, quota: latestQuota(for: account))
+    }
+
+    func balanceDataStatus(for account: Account? = nil) -> DataStatus {
+        if let account {
+            return AccountDataStatus.balance(
+                account: account,
+                balances: latestBalances(for: account)
+            )
+        }
+        if let platform = overviewPlatformFilter, !platform.capabilities.balance {
+            return .unavailable("\(platform.displayName) 平台不提供官方余额")
+        }
+        let scoped = overviewAccountsToShow.filter { $0.provider.capabilities.balance }
+        guard !scoped.isEmpty else {
+            return .missing("所选范围没有提供官方余额的账户")
+        }
+        let statuses = scoped.map {
+            AccountDataStatus.balance(account: $0, balances: latestBalances(for: $0))
+        }
+        return AccountDataStatus.aggregate(statuses, emptyReason: "所选范围没有官方余额数据")
+    }
+
+    func budgetSpendDataStatus(for account: Account) -> DataStatus {
+        AccountDataStatus.budget(account: account, spend: budgetSpend(for: account))
+    }
+
+    func budgetRemainingDataStatus() -> DataStatus {
+        let budgetAccounts: [Account]
+        if let selectedOverviewAccount {
+            budgetAccounts = selectedOverviewAccount.budget == nil ? [] : [selectedOverviewAccount]
+        } else {
+            budgetAccounts = overviewAccountsToShow.filter { $0.budget != nil }
+        }
+        guard !budgetAccounts.isEmpty else {
+            return .unavailable("所选范围没有本地预算")
+        }
+        let statuses = budgetAccounts.map {
+            AccountDataStatus.budget(account: $0, spend: budgetSpend(for: $0))
+        }
+        return AccountDataStatus.aggregate(statuses, emptyReason: "所选范围没有本地预算")
+    }
+
+    func usageDataStatus() -> DataStatus {
+        let base = allUsageDataStatus()
+        guard base.isActual else { return base }
+        if unfilteredRecords.isEmpty {
+            return .missing("所选范围没有可统计的用量记录；DeepSeek 官方不提供历史用量")
+        }
+        return .actual
     }
 
     func budgetSpend(for account: Account) -> Decimal? {
@@ -729,10 +928,17 @@ final class AppModel: ObservableObject {
         if !account.enabled { return .disabled }
         if isSyncing(account) { return .syncing }
         if account.credentialInvalid { return .invalidCredential }
+        if accountAbnormalReason(for: account) != nil { return .accountAbnormal }
         if account.consecutiveFailures > 0 { return .failed }
         if let lastSuccess = account.lastSuccessAt {
             if now.timeIntervalSince(lastSuccess) > settings.refreshInterval * 2 { return .stale }
             if account.lastError != nil { return .partial }
+            if account.provider.capabilities.balance, latestBalances(for: account).isEmpty {
+                return .connectedNoData
+            }
+            if account.provider.capabilities.credits, latestQuota(for: account) == nil {
+                return .connectedNoData
+            }
             return .healthy
         }
         if account.lastError != nil { return .failed }
@@ -751,21 +957,42 @@ final class AppModel: ObservableObject {
                 ? "凭据失效 · 需要 Management Key"
                 : "凭据失效 · 需要重新输入 API Key"
         }
+        if accountAbnormalReason(for: account) != nil {
+            return "账户异常 · 官方标记余额不可用"
+        }
         guard account.lastSuccessAt != nil else {
             if account.lastError != nil { return "能力未验证（同步失败）" }
             return "等待连接测试"
         }
+        let capabilities = account.provider.capabilities
         if account.lastError != nil {
-            return account.provider == .openrouter
-                ? "credits 可用；用量接口暂时不可用"
-                : "部分成功"
+            if capabilities.credits {
+                return latestQuota(for: account) == nil
+                    ? "同步异常 · credits 不可用"
+                    : "credits 可用；用量接口暂时不可用"
+            }
+            if capabilities.balance {
+                return latestBalances(for: account).isEmpty
+                    ? "同步异常 · 余额不可用"
+                    : "部分成功"
+            }
+            return "部分成功"
         }
-        switch account.provider {
-        case .deepseek:
+        if capabilities.credits {
+            if latestQuota(for: account) == nil {
+                return "厂商未返回 credits"
+            }
+            return account.isDemo
+                ? "演示额度 / 用量 / 费用数据"
+                : "credits / 额度 / 用量 / 费用可用"
+        }
+        if capabilities.balance {
+            if latestBalances(for: account).isEmpty {
+                return "厂商未返回余额"
+            }
             return "余额可用 · 官方无历史用量 / 费用"
-        case .openrouter:
-            return "credits / 额度 / 用量 / 费用可用"
         }
+        return "已连接"
     }
 
     func lastSyncText(for account: Account) -> String {
@@ -780,6 +1007,10 @@ final class AppModel: ObservableObject {
         alerts.filter { !$0.acknowledged }
     }
 
+    var unacknowledgedAlertCount: Int {
+        MessageCenter.unacknowledgedCount(alerts)
+    }
+
     var hasCriticalAlert: Bool {
         alerts.contains {
             !$0.acknowledged && [.budgetExceeded, .credentialInvalid, .syncFailed, .dataStale].contains($0.kind)
@@ -790,6 +1021,14 @@ final class AppModel: ObservableObject {
         guard let store = activeStore else { return }
         do {
             try store.acknowledgeAlert(id: alert.id)
+            let removedIds = toastQueue.visible
+                .filter { $0.alertId == alert.id }
+                .map(\.id)
+            for id in removedIds {
+                toastTasks[id]?.cancel()
+                toastTasks.removeValue(forKey: id)
+            }
+            syncVisibleToasts(toastQueue.removeAlert(alertId: alert.id, now: Date()))
             reloadFromStore()
         } catch {
             showBanner("确认告警失败：\(error.localizedDescription)", style: .error)
@@ -984,7 +1223,10 @@ final class AppModel: ObservableObject {
             selectedCurrency = nil
             usageAccountFilter = nil
             usageModelFilter = nil
-            balanceAccountFilter = nil
+            overviewPlatformFilter = nil
+            overviewAccountFilter = nil
+            balanceCurrencyFilter = nil
+            resetToastState()
             reloadFromStore()
             showOnboarding = false
             showBanner("已进入演示模式：所有数据均为模拟数据", style: .info)
@@ -1005,7 +1247,10 @@ final class AppModel: ObservableObject {
         selectedCurrency = nil
         usageAccountFilter = nil
         usageModelFilter = nil
-        balanceAccountFilter = nil
+        overviewPlatformFilter = nil
+        overviewAccountFilter = nil
+        balanceCurrencyFilter = nil
+        resetToastState()
         reloadFromStore()
         syncEngine?.updateSettings(settings)
         syncEngine?.bootstrap(accounts: accounts)
@@ -1040,7 +1285,10 @@ final class AppModel: ObservableObject {
         UserDefaults.standard.removeObject(forKey: Self.demoDisclaimerKey)
         selectedTab = .overview
         selectedCurrency = nil
-        balanceAccountFilter = nil
+        overviewPlatformFilter = nil
+        overviewAccountFilter = nil
+        balanceCurrencyFilter = nil
+        resetToastState()
         syncingAccountIds.removeAll()
         settings = AppSettings()
         transport = URLSessionTransport()
@@ -1112,21 +1360,108 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func showBanner(_ message: String, style: BannerStyle) {
-        banner = Banner(style: style, message: message)
-        bannerDismissTask?.cancel()
-        bannerDismissTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: style == .error ? 7_000_000_000 : 4_000_000_000)
-            guard !Task.isCancelled else { return }
-            if self?.banner?.message == message {
-                self?.banner = nil
-            }
+    private func handleLoadedAlerts(_ loaded: [AlertEvent], previousIds: Set<String>) {
+        let loadedIds = Set(loaded.map(\.id))
+        let staleVisibleIds = toasts.compactMap { toast -> String? in
+            guard let alertId = toast.alertId, !loadedIds.contains(alertId) else { return nil }
+            return toast.id
+        }
+        for id in staleVisibleIds {
+            toastTasks[id]?.cancel()
+            toastTasks.removeValue(forKey: id)
+        }
+        syncVisibleToasts(toastQueue.removeAlerts(notIn: loadedIds, now: Date()))
+
+        let unacknowledged = loaded.filter { !$0.acknowledged }
+        if !hasLoadedAlertHistory {
+            hasLoadedAlertHistory = true
+            guard isDemo else { return }
+            enqueueAlertToasts(unacknowledged)
+            return
+        }
+        let newAlerts = unacknowledged.filter { !previousIds.contains($0.id) }
+        enqueueAlertToasts(newAlerts)
+    }
+
+    private func enqueueAlertToasts(_ alerts: [AlertEvent]) {
+        guard !alerts.isEmpty else { return }
+        for alert in alerts.sorted(by: { $0.firedAt > $1.firedAt }) {
+            guard !shownAlertIds.contains(alert.id) else { continue }
+            shownAlertIds.insert(alert.id)
+            enqueueToast(AlertNoticePolicy.toast(for: alert))
         }
     }
 
-    func dismissBanner() {
-        bannerDismissTask?.cancel()
-        banner = nil
+    private func bannerTitle(for style: BannerStyle) -> String {
+        switch style {
+        case .info: return "提示"
+        case .success: return "成功"
+        case .warning: return "提示"
+        case .error: return "错误"
+        }
+    }
+
+    private func enqueueToast(_ toast: ToastMessage) {
+        let promoted = toastQueue.enqueue(toast, now: Date())
+        syncVisibleToasts(promoted)
+    }
+
+    private func syncVisibleToasts(_ promoted: [ToastMessage]) {
+        toasts = toastQueue.visible
+        for toast in promoted where toast.autoDismiss {
+            scheduleExpiry(for: toast)
+        }
+    }
+
+    private func scheduleExpiry(for toast: ToastMessage) {
+        toastTasks[toast.id]?.cancel()
+        toastTasks[toast.id] = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(toast.duration * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            self?.expireToast(toast.id)
+        }
+    }
+
+    private func expireToast(_ id: String) {
+        guard toastQueue.visible.contains(where: { $0.id == id }) else { return }
+        let promoted = toastQueue.expire(id: id, now: Date())
+        toastTasks[id]?.cancel()
+        toastTasks.removeValue(forKey: id)
+        syncVisibleToasts(promoted)
+    }
+
+    func dismissToast(_ id: String) {
+        let promoted = toastQueue.dismiss(id: id, now: Date())
+        toastTasks[id]?.cancel()
+        toastTasks.removeValue(forKey: id)
+        syncVisibleToasts(promoted)
+    }
+
+    func dismissAllToasts() {
+        toastTasks.values.forEach { $0.cancel() }
+        toastTasks.removeAll()
+        toastQueue.dismissAll()
+        toasts = []
+    }
+
+    private func resetToastState() {
+        dismissAllToasts()
+        shownAlertIds.removeAll()
+        hasLoadedAlertHistory = false
+    }
+
+    func showBanner(_ message: String, style: BannerStyle) {
+        enqueueToast(ToastMessage(
+            id: "banner-\(UUID().uuidString)",
+            title: bannerTitle(for: style),
+            message: message,
+            style: style,
+            alertId: nil,
+            isDemo: isDemo,
+            duration: style == .error ? 8 : style == .warning ? 7 : 5,
+            expiresAt: nil,
+            autoDismiss: style != .error
+        ))
     }
 
     private func updateMenuBar() {

@@ -1,6 +1,6 @@
 # Overplay（构建产物：DSOverplay.app）
 
-macOS 14+ 菜单栏应用，统一查看 **DeepSeek** 与 **OpenRouter** 的官方余额、credits、近 30 天用量与费用，支持本地预算 / 余额低水位告警、余额快照曲线、CSV 导出、演示模式与本地持久化。
+macOS 14+ 菜单栏应用，统一查看 AI 平台的官方余额、credits、近 30 天用量与费用，支持本地预算 / 余额低水位告警、余额快照曲线、CSV 导出、演示模式与本地持久化。**真实连接器仅支持 DeepSeek 与 OpenRouter**；演示模式额外提供 Kimi、GLM、MiniMax、Qwen、豆包 Seed、腾讯混元、OpenAI GPT、Anthropic Claude、Google Gemini、Meta Llama、xAI Grok、Mistral 的虚拟数据，用于演示多平台 / 多账户 / 跨币种展示。
 
 > 这个 demo 是用 DSH 测试开发的一个 demo，开源仅支持个人实践 / 学习，这个 demo 不可商用。
 > This demo is developed and tested with DSH. It is open-source for personal practice and learning only. Commercial use of this demo is prohibited.
@@ -14,7 +14,7 @@ macOS 14+ 菜单栏应用，统一查看 **DeepSeek** 与 **OpenRouter** 的官�
 open DSOverplay.app        # 启动菜单栏应用
 ```
 
-首次启动会展示引导。可添加 DeepSeek / OpenRouter 账户，或进入演示模式（需先确认免责声明）。菜单栏图标可打开摘要面板与主窗口；关闭主窗口只是隐藏，退出请使用面板 / 设置 / 托盘菜单中的「退出 Overplay」。
+首次启动会展示引导。真实模式可添加 DeepSeek / OpenRouter 账户；演示模式（需先确认免责声明）内置 14 个平台的虚拟账户。菜单栏图标可打开摘要面板与主窗口；关闭主窗口只是隐藏，退出请使用面板 / 设置 / 托盘菜单中的「退出 Overplay」。
 
 开发模式下可直接运行并输出调试信息：
 
@@ -40,38 +40,46 @@ open DSOverplay.app        # 启动菜单栏应用
 - 部分成功/凭据失效时预算不可用（不显示 0 或完整剩余）、手动刷新取消与在途写入保护；
 - 真实 `URLSession` 对 302 重定向的拒绝（本地一次性 HTTP 服务）；
 - Keychain 实际读写（测试使用独立 service 并在结束时清理）；
-- CSV 字段、转义、来源 / 时间范围 / 演示数据标识与无密钥。
+- CSV 字段、转义、来源 / 时间范围 / 演示数据标识与无密钥；
+- 数据状态：真实 0、缺失、不可用、部分成功、失败 / 凭据失效、厂商余额异常；
+- 平台 / 账户范围聚合、跨币种隔离、额度与预算排除不完整账户、币种选项与默认选择；
+- 消息筛选、未确认计数、顶部队列上限、error 不自动消失、80% 倒计时与归档；
+- 演示数据 14 平台 / 16 账户 / 每账户 30 个完整 UTC 日且不含今天。
+
+当前共 **111 项 XCTest**，全部通过。
 
 ## 功能范围
 
-- **DeepSeek**：普通 API Key；`GET /user/balance` 读取总余额、赠送余额、充值余额与币种；每次成功同步保存快照，两次以上展示余额曲线。每个账户显示官方返回的账户币种；总览的「官方余额」可按 DeepSeek 账户选择，选中后只显示该账户的币种余额，全部账户时按币种分开展示、不跨币种求和。余额阈值只作用于当前账户，币种跟随该账户；不同币种账户分开统计。官方没有历史 token / 费用接口，界面明确显示「厂商未提供」，不会伪造为 0。
+- **DeepSeek**：普通 API Key；`GET /user/balance` 读取总余额、赠送余额、充值余额与币种；每次成功同步保存快照，两次以上展示余额曲线。每个账户显示官方返回的账户币种；总览的「官方余额」卡片内提供紧凑币种下拉（如 `¥ CNY` / `$ USD`），默认 CNY，仅当当前范围实际返回多个币种时显示；选择 USD 账户会自动切到 USD，只显示所选币种，不混合其他币种。余额阈值只作用于当前账户，币种跟随该账户；不同币种账户分开统计。官方没有历史 token / 费用接口，界面明确显示「厂商未提供」，不会伪造为 0。
 - **OpenRouter**：需要 **Management Key**；读取 `GET /api/v1/credits` 与 `GET /api/v1/activity`。按日 / 模型展示 prompt、completion、reasoning、缓存 tokens、请求数与 usage 费用；BYOK 费用单独标注；用量窗口约最近 30 个 UTC 日；普通 API Key 会得到“需要 Management Key”的可操作提示。
-- **主看板**：总览、用量、额度、设置四个页签；7 / 30 / 90 天范围；按账户 / 模型筛选；费用按厂商堆叠、token 趋势、模型拆分、明细与占比；CSV 导出当前筛选。趋势图保留所选范围的全部日期，缺失日期留空且不补 0；当天无数据时直接显示空白并提示下一 UTC 日回填。
-- **预算与告警**：OpenRouter 本地月度预算（80% / 100%）、DeepSeek 余额低水位、连续 3 次同步失败、凭据失效、超过 2 个刷新周期未成功同步；应用内告警历史 + 本地通知；同一预算阈值同月只触发一次，余额回升后重新布防，同步失败冷却 6 小时。
+- **主看板**：总览、用量、额度、设置四个页签；消息中心是顶部 / 总览面板，不占用独立 Tab。总览顶部按已有账户生成平台按钮（All / 各平台，横向滚动），选中平台后账户列表与费用、tokens、官方余额、credits、本地预算都按平台过滤；平台内有多个账户时显示“全部 / 指定账户”chips，名称使用用户自定义账户名。跨平台、跨币种不混算。7 / 30 / 90 天范围；按账户 / 模型筛选；费用按厂商堆叠、token 趋势、模型拆分、明细与占比；CSV 导出当前筛选。趋势图保留所选范围的全部日期，缺失日期留空且不补 0；当天无数据时直接显示空白并提示下一 UTC 日回填。
+- **数据状态**：只有厂商明确返回 0 时才显示真实的 0；缺失、不可用、未同步、部分成功、同步失败或凭据失效显示「无数据 / 不可用 / 暂无完整数据 / 同步失败」等空状态与原因，不使用 `0`、`0?` 或 `0%` 占位。部分成功 / 缺失数据不参与预算、额度使用率或阈值告警计算。
+- **消息中心**：顶部最多同时显示 3 条消息并叠加显示，不挤压布局；error 类消息（预算已用尽、余额低于阈值、同步失败、凭据失效）需手动关闭，预算 80% 通知倒计时后归档，普通告知倒计时后关闭，不显示进度条。消息中心从顶部消息、总览或额度页打开，支持搜索、类型 / 账户 / 状态 / 时间筛选、确认与未确认计数；Overview / Quota 不再各自维护旧告警列表。演示来源消息持续标注「演示数据」。
+- **预算与告警**：本地月度预算（80% / 100%；真实模式当前为 OpenRouter，演示模式还覆盖 Kimi、GLM、Qwen、OpenAI、Anthropic、Mistral）、DeepSeek 余额低水位、连续 3 次同步失败、凭据失效、超过 2 个刷新周期未成功同步；应用内消息中心 + 本地通知；同一预算阈值同月只触发一次，余额回升后重新布防，同步失败冷却 6 小时。
 - **刷新**：全部 / 单账户手动刷新；自动刷新默认 15 分钟（5–60 分钟可配置）；指数退避与 Retry-After；同一账户 single-flight；同步不阻塞 UI。
-- **演示模式**：内置 DeepSeek / OpenRouter 模拟数据与告警，覆盖主要页面；其中包含 CNY 与 USD 两个 DeepSeek 账户，用于展示账户级币种选择。所有演示内容持续标注「演示数据」，导出文件带 `demo` 标记；**不发起外部网络请求、不读写 Keychain、不打开真实数据库**。演示用量模拟 OpenRouter 真实窗口（仅最近 30 个完整 UTC 日，不含今天），因此「今日费用」等当天视图会如实显示空状态。
+- **演示模式**：内置 **14 个平台 / 16 个账户**、30 个完整 UTC 日的虚拟数据与告警；DeepSeek 含 CNY / USD 两个账户，Kimi 含主账户 / 团队账户；其余平台包括 OpenRouter、GLM、MiniMax、Qwen、豆包 Seed、腾讯混元、OpenAI GPT、Anthropic Claude、Google Gemini、Meta Llama、xAI Grok、Mistral。所有演示内容持续标注「演示数据」，导出文件带 `demo` 标记；**不发起外部网络请求、不读写 Keychain、不打开真实数据库**。演示用量仅覆盖最近 30 个完整 UTC 日（不含今天），因此「今日费用」等当天视图会如实显示空状态。
 
 界面效果（均为演示数据）：
 
-| 总览 | 用量 |
+| 总览（All / 平台栏） | 平台选中与账户 chips |
 | --- | --- |
-| ![总览](docs/screenshots/overview.png) | ![用量](docs/screenshots/usage.png) |
+| ![总览](docs/screenshots/overview.png) | ![平台与账户 chips](docs/screenshots/platform-accounts.png) |
 
-| 额度 | 设置 |
+| 官方余额币种下拉（DeepSeek All） | 空状态：无数据 / 不可用 |
 | --- | --- |
-| ![额度](docs/screenshots/quota.png) | ![设置](docs/screenshots/settings.png) |
+| ![官方余额币种下拉](docs/screenshots/balance-currency.png) | ![空状态](docs/screenshots/empty-state.png) |
 
-| 模型拆分（含 reasoning / cached / 请求数） | 用量明细（滚动至表格） |
+| 顶部消息（最多 3 条；error 手动关闭） | 消息中心面板（无独立 Tab，可筛选 / 确认） |
 | --- | --- |
-| ![模型拆分](docs/screenshots/usage-model.png) | ![用量明细](docs/screenshots/usage-detail.png) |
+| ![顶部消息](docs/screenshots/messages-toasts.png) | ![消息中心](docs/screenshots/messages.png) |
 
-额度页将本机自然月预算与所选分析范围分开：预算使用率只按本机自然月统计，所选范围仅作独立参考，不参与告警。
+| 用量（多平台堆叠） | 额度 |
+| --- | --- |
+| ![用量](docs/screenshots/usage.png) | ![额度](docs/screenshots/quota.png) |
 
-![额度预算与所选范围](docs/screenshots/quota-budget.png)
+![设置](docs/screenshots/settings.png)
 
-额度页按账户展示 DeepSeek 币种与阈值，两个账户的 CNY / USD 余额不会合并：
-
-![DeepSeek 多账户币种与阈值](docs/screenshots/quota-accounts.png)
+额度页按账户展示 DeepSeek 币种与阈值，两个账户的 CNY / USD 余额不会合并；部分成功或缺失数据不计算使用率 / 剩余 / 预估。
 
 另有引导页与深色模式截图：`docs/screenshots/onboarding.png`、`docs/screenshots/dark-overview.png`。
 
@@ -89,13 +97,14 @@ open DSOverplay.app        # 启动菜单栏应用
 
 - 入口：首次引导或设置页；进入前展示完整免责声明，取消则不进入。
 - 演示数据位于内存命名空间，不读取真实账户或凭证；不启动同步引擎，因此不会产生任何外部请求。
-- 演示用量与 OpenRouter 官方窗口一致：仅最近 30 个完整 UTC 日，不含今天；趋势图保留所选范围最后一天的空位并给出提示，不隐藏、不补 0。
+- 演示数据覆盖 14 个平台、16 个账户，每个有用量数据的账户都包含 30 个完整 UTC 日（不含今天）；趋势图保留所选范围最后一天的空位并给出提示，不隐藏、不补 0。
+- 演示平台只有虚拟数据与能力声明，真实账户编辑器仍只允许 DeepSeek / OpenRouter；未接入平台由 `UnsupportedConnector` 明确拒绝，不会发起真实请求。
 - 导出 CSV 文件名含 `demo`，内容含「是否演示数据」列与「演示数据」标识；演示告警不会发送系统通知。
 - 演示模式会持久化开关；下次启动仍为演示模式，所有页面继续显示演示标识。退出后回到真实模式。
 
 ## 已知限制
 
-- 本 Issue 仅接入 DeepSeek 与 OpenRouter；OpenAI / Anthropic / Azure / Google / 内部网关连接器未实现。
+- 真实连接器仅接入 DeepSeek 与 OpenRouter。Kimi、GLM、MiniMax、Qwen、豆包 Seed、腾讯混元、OpenAI GPT、Anthropic Claude、Google Gemini、Meta Llama、xAI Grok、Mistral 目前只有演示虚拟数据，没有同步引擎、凭据校验或真实接口；真实模式账户编辑器不允许添加这些平台。接入真实平台需要后续连接器 issue。
 - DeepSeek 无历史用量 / 费用接口，只能展示余额快照，不提供 token 趋势或百分比额度。
 - OpenRouter activity 仅覆盖最近约 30 个 UTC 日；超出窗口不显示、不补 0。费用 / token 趋势图保留所选范围的全部日期，缺失日期留空；当天数据通常要到下一 UTC 日才可见。OpenRouter 金额为 USD，credits 与本地预算分开展示。
 - DeepSeek 每个账户只设置一个余额低水位阈值，币种必须与该账户余额接口返回的币种一致；若一个账户返回多个币种，可在这些币种中选择一个作为该账户的阈值。不同账户 / 币种不合并统计。

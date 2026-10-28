@@ -13,14 +13,14 @@ struct QuotaView: View {
                 EmptyStateView(
                     symbol: "gauge.with.dots.needle.50percent",
                     title: "暂无账户",
-                    message: "添加 DeepSeek 或 OpenRouter 账户后，可在此查看官方余额、credits 与本地预算。"
+                    message: "添加 DeepSeek 或 OpenRouter 真实账户，或切换到演示模式查看各平台虚拟额度、用量与本地预算。"
                 )
             } else {
                 ForEach(model.accounts) { account in
                     accountSection(account)
                 }
+                MessageCenterEntryCard(model: model)
             }
-            alertHistory
         }
         .sheet(item: $budgetAccount) { account in
             BudgetEditorView(model: model, account: account, kind: .budget)
@@ -61,7 +61,11 @@ struct QuotaView: View {
                     .disabled(model.isDemo || !account.enabled || model.isSyncing(account))
                 }
 
-                if account.provider == .deepseek {
+                if let issue = model.dataIssue(for: account) {
+                    AnomalyNotice(message: issue)
+                }
+
+                if account.provider.capabilities.balance {
                     deepSeekSection(account)
                 } else {
                     openRouterSection(account)
@@ -79,13 +83,45 @@ struct QuotaView: View {
     }
 
     @ViewBuilder
+    private func statusMessage(_ status: DataStatus) -> some View {
+        switch status {
+        case .actual, .anomaly:
+            EmptyView()
+        case .missing(let reason), .unavailable(let reason):
+            Text(reason)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        case .partial(let reason), .failed(let reason):
+            Text(reason)
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder
     private func deepSeekSection(_ account: Account) -> some View {
         let balances = model.latestBalances(for: account)
+        let status = model.balanceDataStatus(for: account).prefixed("官方余额")
         Divider()
         if balances.isEmpty {
-            Text(model.health(for: account) == .neverSynced ? "尚未同步余额。" : "厂商未提供余额数据。")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("官方余额 · \(model.currencyLabel(for: account))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        DataValueLabel(
+                            text: "无数据",
+                            status: status,
+                            font: .system(size: 30, weight: .semibold, design: .rounded)
+                        )
+                    }
+                    Spacer()
+                }
+                statusMessage(status)
+            }
         } else {
             ForEach(balances) { balance in
                 HStack(alignment: .firstTextBaseline, spacing: 18) {
@@ -93,8 +129,11 @@ struct QuotaView: View {
                         Text("官方余额 · \(balance.currency)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text(Money.formatBalance(balance.total, currency: balance.currency))
-                            .font(.system(size: 30, weight: .semibold, design: .rounded))
+                        DataValueLabel(
+                            text: Money.formatBalance(balance.total, currency: balance.currency),
+                            status: status,
+                            font: .system(size: 30, weight: .semibold, design: .rounded)
+                        )
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         if let granted = balance.granted {
@@ -111,8 +150,8 @@ struct QuotaView: View {
                     Spacer()
                     if let isAvailable = balance.isAvailable {
                         Label(
-                            isAvailable ? "官方标记可用" : "官方标记不可用",
-                            systemImage: isAvailable ? "checkmark.circle" : "xmark.circle"
+                            isAvailable ? "官方标记可用" : "官方标记账户异常",
+                            systemImage: isAvailable ? "checkmark.circle" : "exclamationmark.triangle.fill"
                         )
                         .font(.caption)
                         .foregroundStyle(isAvailable ? .green : .orange)
@@ -165,6 +204,7 @@ struct QuotaView: View {
         let threshold = account.balanceThreshold
         let balances = model.latestBalances(for: account)
         let relevant = balances.first { $0.currency == threshold?.currency }
+        let status = model.balanceDataStatus(for: account)
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("余额低水位阈值").font(.subheadline.weight(.semibold))
@@ -172,7 +212,7 @@ struct QuotaView: View {
                     Text("阈值 \(Money.formatBalance(threshold.amount, currency: threshold.currency)) · 仅用于本地告警，不是官方限额")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    if let relevant {
+                    if status.isActual, let relevant {
                         Text(
                             relevant.total < threshold.amount
                                 ? "当前已低于阈值：\(Money.formatBalance(relevant.total, currency: relevant.currency))"
@@ -180,6 +220,10 @@ struct QuotaView: View {
                         )
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(relevant.total < threshold.amount ? .orange : .green)
+                    } else if !status.isActual {
+                        Text("暂不评估阈值：\(status.reason ?? status.emptyLabel)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     } else if !balances.isEmpty {
                         Text("该账户当前余额币种为 \(model.currencyLabel(for: account))，请重新设置阈值币种。")
                             .font(.caption)
@@ -210,13 +254,18 @@ struct QuotaView: View {
     private func openRouterSection(_ account: Account) -> some View {
         Divider()
         let quota = model.latestQuota(for: account)
+        let quotaName = account.provider == .openrouter ? "credits" : "额度"
+        let status = model.creditDataStatus(for: account).prefixed("官方 \(quotaName)")
         if let quota {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 20) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("官方 credits 剩余").font(.caption).foregroundStyle(.secondary)
-                        Text(Money.formatBalance(quota.remaining, currency: quota.currency))
-                            .font(.system(size: 30, weight: .semibold, design: .rounded))
+                        Text("官方 \(quotaName) 剩余").font(.caption).foregroundStyle(.secondary)
+                        DataValueLabel(
+                            text: Money.formatBalance(quota.remaining, currency: quota.currency),
+                            status: status,
+                            font: .system(size: 30, weight: .semibold, design: .rounded)
+                        )
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         Text("总充值 \(Money.formatBalance(quota.totalCredits, currency: quota.currency))")
@@ -226,7 +275,7 @@ struct QuotaView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     Spacer()
-                    if let percent = quota.usagePercent {
+                    if status.isActual, let percent = quota.usagePercent {
                         VStack(alignment: .trailing, spacing: 2) {
                             Text("官方额度使用率").font(.caption).foregroundStyle(.secondary)
                             Text(Money.percent(percent))
@@ -235,7 +284,7 @@ struct QuotaView: View {
                         }
                     }
                 }
-                if let percent = quota.usagePercent {
+                if status.isActual, let percent = quota.usagePercent {
                     ProgressView(
                         value: min(max(NSDecimalNumber(decimal: percent).doubleValue / 100.0, 0), 1)
                     )
@@ -244,11 +293,33 @@ struct QuotaView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
+                if !status.isActual {
+                    statusMessage(status)
+                }
             }
         } else {
-            Text("尚未获取 credits。需要 OpenRouter Management Key。")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("官方 \(quotaName) 剩余").font(.caption).foregroundStyle(.secondary)
+                        DataValueLabel(
+                            text: "无数据",
+                            status: status,
+                            font: .system(size: 30, weight: .semibold, design: .rounded)
+                        )
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("官方额度使用率").font(.caption).foregroundStyle(.secondary)
+                        DataValueLabel(
+                            text: "无数据",
+                            status: status,
+                            font: .headline
+                        )
+                    }
+                }
+                statusMessage(status)
+            }
         }
 
         Divider()
@@ -264,6 +335,7 @@ struct QuotaView: View {
         let forecast = model.budgetForecast(for: account)
         let month = CalendarDay.monthRange(now: model.now)
         let analysisRange = model.currentRange
+        let spendStatus = model.budgetSpendDataStatus(for: account).prefixed("本月已用")
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label("本地预算", systemImage: "target")
@@ -330,7 +402,7 @@ struct QuotaView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    Text("本月已用按本机自然月 \(month.range.startDay) 至 \(month.range.endDay) 的 OpenRouter UTC 日桶统计，可能不含今天且仅覆盖约 30 天窗口；不完整时不触发预算告警。")
+                    Text("本月已用按本机自然月 \(month.range.startDay) 至 \(month.range.endDay) 的厂商 UTC 日桶统计，可能不含今天且仅覆盖约 30 天窗口；不完整时不触发预算告警。")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -338,9 +410,11 @@ struct QuotaView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 18) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("本月已用").font(.caption).foregroundStyle(.secondary)
-                            Text("暂无完整数据")
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(.orange)
+                            DataValueLabel(
+                                text: "无数据",
+                                status: spendStatus,
+                                font: .title3.weight(.semibold)
+                            )
                         }
                         VStack(alignment: .leading, spacing: 2) {
                             Text("预算").font(.caption).foregroundStyle(.secondary)
@@ -349,13 +423,25 @@ struct QuotaView: View {
                         }
                         VStack(alignment: .leading, spacing: 2) {
                             Text("剩余").font(.caption).foregroundStyle(.secondary)
-                            Text("—").font(.title3.weight(.semibold))
+                            DataValueLabel(
+                                text: "—",
+                                status: spendStatus,
+                                font: .title3.weight(.semibold)
+                            )
                         }
                         Spacer()
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("使用率").font(.caption).foregroundStyle(.secondary)
+                            DataValueLabel(
+                                text: "无数据",
+                                status: spendStatus,
+                                font: .title3.weight(.semibold)
+                            )
+                        }
                     }
-                    Text("activity 尚未成功同步、部分失败或凭据失效；不显示为 0，不计算使用率、剩余和预估，也不触发预算阈值告警。")
+                    Text(spendStatus.reason ?? "本月数据不完整，不计算剩余 / 预估，也不触发预算阈值告警。")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(spendStatus.isActual ? Color.secondary : Color.orange)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
@@ -387,17 +473,21 @@ struct QuotaView: View {
                 && $0.currency == budget.currency
         }
         let selectedCosts = selectedRecords.compactMap(\.cost)
-        let selectedCostText: String
-        if selectedRecords.isEmpty {
-            selectedCostText = "无数据"
+        let selectedStatus: DataStatus
+        if account.credentialInvalid {
+            selectedStatus = .failed("凭据失效：\(account.lastError ?? "需要重新输入 API Key")")
+        } else if let error = account.lastError, !error.isEmpty {
+            selectedStatus = .partial("同步失败：\(error)")
+        } else if selectedRecords.isEmpty {
+            selectedStatus = .missing("所选分析范围没有该账户的用量记录")
         } else if selectedCosts.isEmpty {
-            selectedCostText = "费用未提供"
+            selectedStatus = .missing("所选记录未提供费用字段")
         } else {
-            selectedCostText = Money.formatCost(
-                selectedCosts.reduce(Decimal(0), +),
-                currency: budget.currency
-            )
+            selectedStatus = .actual
         }
+        let selectedCostText = selectedCosts.isEmpty
+            ? "无数据"
+            : Money.formatCost(selectedCosts.reduce(Decimal(0), +), currency: budget.currency)
         return VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 8) {
                 Label("所选分析范围", systemImage: "calendar")
@@ -406,10 +496,17 @@ struct QuotaView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("该账户费用：\(selectedCostText)")
-                    .font(.caption.weight(.semibold))
+                HStack(spacing: 4) {
+                    Text("该账户费用：")
+                        .font(.caption.weight(.semibold))
+                    DataValueLabel(
+                        text: selectedCostText,
+                        status: selectedStatus.prefixed("所选范围费用"),
+                        font: .caption.weight(.semibold)
+                    )
+                }
             }
-            Text("仅统计上述时间段内已同步的 OpenRouter 厂商 UTC 日桶，不参与本地月度预算和告警。")
+            Text("仅统计上述时间段内已同步的厂商 UTC 日桶，不参与本地月度预算和告警。")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             Text("本地预算周期：本机自然月 \(month.range.startDay) 至 \(month.range.endDay)；发生跨月时不会把所选范围当作预算周期。")
@@ -418,38 +515,6 @@ struct QuotaView: View {
         }
     }
 
-    private var alertHistory: some View {
-        SectionCard(
-            title: "告警记录",
-            subtitle: "\(model.alerts.count) 条",
-            isDemo: model.isDemo
-        ) {
-            if model.alerts.isEmpty {
-                HStack {
-                    Image(systemName: "bell.slash").foregroundStyle(.secondary)
-                    Text("暂无告警记录。")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                ForEach(Array(model.alerts.prefix(50))) { alert in
-                    AlertRowView(
-                        alert: alert,
-                        isDemo: model.isDemo,
-                        onAcknowledge: { model.acknowledge(alert) }
-                    )
-                    if alert.id != model.alerts.prefix(50).last?.id {
-                        Divider()
-                    }
-                }
-                if model.alerts.count > 50 {
-                    Text("仅显示最近 50 条；完整记录保存在本地数据库。")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
 }
 
 enum BudgetEditorKind {
@@ -505,7 +570,7 @@ struct BudgetEditorView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text("\(account.displayName) · \(model.currencyLabel(for: account))").font(.headline)
                 if kind == .budget {
-                    Text("OpenRouter 月度预算仅用于本机告警，与官方 credits 额度分开；使用率达到 80% / 100% 时各触发一次告警。")
+                    Text("月度预算按本机自然月统计用量费用，仅用于本机告警，与厂商官方额度分开；使用率达到 80% / 100% 时各触发一次告警。")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

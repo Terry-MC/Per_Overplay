@@ -10,12 +10,16 @@ struct LaunchOptions {
     var snapshotPath: String?
     var snapshotDirectory: String?
     var dataDirectory: URL?
+    var overviewPlatform: ProviderKind?
+    var overviewAccount: String?
     var windowHeight: CGFloat?
     var darkAppearance = false
     var uiSmoke = false
     var showMenuPanel = false
     var benchmark = false
     var scrollBottom = false
+    var showMessages = false
+    var suppressToasts = false
 
     static func parse(_ arguments: [String]) -> LaunchOptions {
         var options = LaunchOptions()
@@ -39,6 +43,12 @@ struct LaunchOptions {
             case "--data-dir" where index + 1 < arguments.count:
                 index += 1
                 options.dataDirectory = URL(fileURLWithPath: arguments[index], isDirectory: true)
+            case "--overview-platform" where index + 1 < arguments.count:
+                index += 1
+                options.overviewPlatform = ProviderKind(rawValue: arguments[index])
+            case "--overview-account" where index + 1 < arguments.count:
+                index += 1
+                options.overviewAccount = arguments[index]
             case "--window-height" where index + 1 < arguments.count:
                 index += 1
                 if let height = Double(arguments[index]) {
@@ -54,6 +64,10 @@ struct LaunchOptions {
                 options.benchmark = true
             case "--scroll-bottom":
                 options.scrollBottom = true
+            case "--show-messages":
+                options.showMessages = true
+            case "--no-toasts":
+                options.suppressToasts = true
             default:
                 break
             }
@@ -82,7 +96,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         model = AppModel(dataDirectory: options.dataDirectory, forceDemo: options.demo)
+        if options.suppressToasts {
+            model.dismissAllToasts()
+        }
         model.selectedTab = options.tab
+        if let platform = options.overviewPlatform {
+            model.overviewPlatformFilter = platform
+            if let account = options.overviewAccount {
+                model.overviewAccountFilter = account
+            }
+        }
         windowController = DashboardWindowController(model: model)
         statusBarController = StatusBarController(model: model) { [weak self] tab in
             self?.showMainWindow(tab: tab)
@@ -99,6 +122,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             windowController.setContentSize(width: 1280, height: 800)
         }
 
+        if options.showMessages {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                self?.model.showMessageCenter = true
+            }
+        }
         if isSnapshotMode {
             Task { await runSnapshots() }
         }
