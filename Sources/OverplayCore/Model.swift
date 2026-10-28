@@ -460,6 +460,8 @@ public enum AccountHealth: Equatable {
     case partial
     case failed
     case invalidCredential
+    case accountAbnormal
+    case connectedNoData
     case disabled
     case stale
 
@@ -471,6 +473,8 @@ public enum AccountHealth: Equatable {
         case .partial: return "部分成功"
         case .failed: return "同步失败"
         case .invalidCredential: return "凭据失效"
+        case .accountAbnormal: return "账户异常"
+        case .connectedNoData: return "已连接 · 无数据"
         case .disabled: return "已禁用"
         case .stale: return "已过期"
         }

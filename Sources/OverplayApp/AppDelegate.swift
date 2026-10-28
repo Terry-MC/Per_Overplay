@@ -16,6 +16,7 @@ struct LaunchOptions {
     var showMenuPanel = false
     var benchmark = false
     var scrollBottom = false
+    var suppressToasts = false
 
     static func parse(_ arguments: [String]) -> LaunchOptions {
         var options = LaunchOptions()
@@ -54,6 +55,8 @@ struct LaunchOptions {
                 options.benchmark = true
             case "--scroll-bottom":
                 options.scrollBottom = true
+            case "--no-toasts":
+                options.suppressToasts = true
             default:
                 break
             }
@@ -82,6 +85,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         model = AppModel(dataDirectory: options.dataDirectory, forceDemo: options.demo)
+        if options.suppressToasts {
+            model.dismissAllToasts()
+        }
         model.selectedTab = options.tab
         windowController = DashboardWindowController(model: model)
         statusBarController = StatusBarController(model: model) { [weak self] tab in
