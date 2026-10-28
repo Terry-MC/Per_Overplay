@@ -121,7 +121,7 @@ struct SettingsView: View {
                                     Text(account.displayName).font(.subheadline.weight(.semibold))
                                     if model.isDemo || account.isDemo { DemoTag() }
                                 }
-                                Text(account.provider.displayName + " · " + model.capabilitySummary(for: account))
+                                Text(account.provider.displayName + " · " + model.currencyLabel(for: account) + " · " + model.capabilitySummary(for: account))
                                     .font(.caption)
                                     .foregroundStyle(account.credentialInvalid ? .red : .secondary)
                                 Text(model.lastSyncText(for: account))

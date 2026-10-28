@@ -17,10 +17,21 @@ public enum DemoData {
             provider: .deepseek,
             name: "DeepSeek 演示账户",
             enabled: true,
-            createdAt: now.addingTimeInterval(-40 * 86_400),
+            createdAt: now.addingTimeInterval(-42 * 86_400),
             lastSuccessAt: now.addingTimeInterval(-120),
             lastAttemptAt: now.addingTimeInterval(-120),
             balanceThreshold: BalanceThreshold(amount: 100, currency: "CNY"),
+            isDemo: true
+        )
+        let demoDeepSeekUSD = Account(
+            id: "demo-deepseek-usd",
+            provider: .deepseek,
+            name: "DeepSeek 演示账户（USD）",
+            enabled: true,
+            createdAt: now.addingTimeInterval(-41 * 86_400),
+            lastSuccessAt: now.addingTimeInterval(-240),
+            lastAttemptAt: now.addingTimeInterval(-240),
+            balanceThreshold: BalanceThreshold(amount: 20, currency: "USD"),
             isDemo: true
         )
         let demoOpenRouter = Account(
@@ -35,6 +46,7 @@ public enum DemoData {
             isDemo: true
         )
         try store.insertAccount(demoDeepSeek)
+        try store.insertAccount(demoDeepSeekUSD)
         try store.insertAccount(demoOpenRouter)
 
         let balanceValues: [Decimal] = [238.40, 212.10, 187.55, 161.20, 138.90, 116.30, 92.40]
@@ -51,6 +63,23 @@ public enum DemoData {
                 isAvailable: true,
                 asOf: asOf,
                 source: "演示数据 · DeepSeek 官方余额模型"
+            )])
+        }
+
+        let usdBalanceValues: [Decimal] = [64.80, 58.30, 51.90, 47.20, 41.50, 37.10, 32.60]
+        for (index, value) in usdBalanceValues.enumerated() {
+            let offset = -240 - Double(usdBalanceValues.count - 1 - index) * 4 * 86_400
+            let asOf = now.addingTimeInterval(offset)
+            try store.insertBalanceSnapshots([BalanceSnapshot(
+                id: "demo-balance-usd-\(index)",
+                accountId: demoDeepSeekUSD.id,
+                currency: "USD",
+                total: value,
+                granted: 5,
+                toppedUp: value - 5,
+                isAvailable: true,
+                asOf: asOf,
+                source: "演示数据 · DeepSeek 官方余额模型（USD）"
             )])
         }
 
@@ -137,6 +166,36 @@ public enum DemoData {
             lastSuccessAt: demoDeepSeek.lastSuccessAt,
             lastAttemptAt: demoDeepSeek.lastAttemptAt,
             createdAt: demoDeepSeek.createdAt,
+            refreshInterval: 15 * 60,
+            usageIsFresh: true,
+            now: now
+        ))
+        let latestUSDBalance = BalanceSnapshot(
+            accountId: demoDeepSeekUSD.id,
+            currency: "USD",
+            total: 32.60,
+            granted: 5,
+            toppedUp: 27.60,
+            isAvailable: true,
+            asOf: now.addingTimeInterval(-240),
+            source: "演示数据 · DeepSeek 官方余额模型（USD）"
+        )
+        _ = try engine.evaluate(AlertSnapshot(
+            accountId: demoDeepSeekUSD.id,
+            accountName: demoDeepSeekUSD.displayName,
+            provider: .deepseek,
+            enabled: true,
+            isDemo: true,
+            budget: nil,
+            monthSpend: nil,
+            balanceThreshold: demoDeepSeekUSD.balanceThreshold,
+            latestBalance: latestUSDBalance,
+            balanceIsFresh: true,
+            consecutiveFailures: 0,
+            credentialInvalid: false,
+            lastSuccessAt: demoDeepSeekUSD.lastSuccessAt,
+            lastAttemptAt: demoDeepSeekUSD.lastAttemptAt,
+            createdAt: demoDeepSeekUSD.createdAt,
             refreshInterval: 15 * 60,
             usageIsFresh: true,
             now: now

@@ -45,7 +45,7 @@ struct QuotaView: View {
                             Text(account.displayName).font(.headline)
                             if model.isDemo || account.isDemo { DemoTag() }
                         }
-                        Text(account.provider.displayName + " · " + model.capabilitySummary(for: account))
+                        Text(accountSubtitle(account))
                             .font(.caption)
                             .foregroundStyle(account.credentialInvalid ? .red : .secondary)
                     }
@@ -68,6 +68,14 @@ struct QuotaView: View {
                 }
             }
         }
+    }
+
+    private func accountSubtitle(_ account: Account) -> String {
+        [
+            account.provider.displayName,
+            model.currencyLabel(for: account),
+            model.capabilitySummary(for: account)
+        ].joined(separator: " · ")
     }
 
     @ViewBuilder
@@ -172,9 +180,13 @@ struct QuotaView: View {
                         )
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(relevant.total < threshold.amount ? .orange : .green)
+                    } else if !balances.isEmpty {
+                        Text("该账户当前余额币种为 \(model.currencyLabel(for: account))，请重新设置阈值币种。")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
                     }
                 } else {
-                    Text("未设置。低于阈值时产生本地告警；回升到阈值以上后才重新布防。")
+                    Text("未设置。阈值跟随账户币种；低于阈值时产生本地告警，回升到阈值以上后才重新布防。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -469,7 +481,11 @@ struct BudgetEditorView: View {
                 NSDecimalNumber(decimal: $0.amount).stringValue
             } ?? "")
             let balances = model.latestBalances(for: account).map(\.currency)
-            _currency = State(initialValue: account.balanceThreshold?.currency ?? balances.first ?? "CNY")
+            _currency = State(
+                initialValue: account.balanceThreshold?.currency
+                    ?? balances.first
+                    ?? account.provider.defaultCurrency
+            )
         }
     }
 
@@ -487,14 +503,14 @@ struct BudgetEditorView: View {
             .padding(20)
             Divider()
             VStack(alignment: .leading, spacing: 14) {
-                Text(account.displayName).font(.headline)
+                Text("\(account.displayName) · \(model.currencyLabel(for: account))").font(.headline)
                 if kind == .budget {
                     Text("OpenRouter 月度预算仅用于本机告警，与官方 credits 额度分开；使用率达到 80% / 100% 时各触发一次告警。")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
-                    Text("当官方余额低于该值时触发本地告警；余额回升到阈值以上后自动重新布防。余额没有官方上限，因此不显示百分比额度。")
+                    Text("当官方余额低于该值时触发本地告警；余额回升到阈值以上后自动重新布防。余额没有官方上限，因此不显示百分比额度。阈值只作用于当前账户，币种由该账户余额接口确定，不同账户 / 币种分开统计。")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -539,8 +555,14 @@ struct BudgetEditorView: View {
         case .budget:
             return ["USD"]
         case .threshold:
-            let balances = model.latestBalances(for: account).map(\.currency)
-            return Array(Set(balances + ["CNY", "USD"])).sorted()
+            var options = Set(model.latestBalances(for: account).map(\.currency))
+            if let existing = account.balanceThreshold?.currency {
+                options.insert(existing)
+            }
+            if options.isEmpty {
+                options.insert(account.provider.defaultCurrency)
+            }
+            return options.sorted()
         }
     }
 

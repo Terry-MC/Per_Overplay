@@ -44,12 +44,12 @@ open DSOverplay.app        # 启动菜单栏应用
 
 ## 功能范围
 
-- **DeepSeek**：普通 API Key；`GET /user/balance` 读取总余额、赠送余额、充值余额与币种；每次成功同步保存快照，两次以上展示余额曲线。官方没有历史 token / 费用接口，界面明确显示「厂商未提供」，不会伪造为 0。
+- **DeepSeek**：普通 API Key；`GET /user/balance` 读取总余额、赠送余额、充值余额与币种；每次成功同步保存快照，两次以上展示余额曲线。每个账户显示官方返回的账户币种；总览的「官方余额」可按 DeepSeek 账户选择，选中后只显示该账户的币种余额，全部账户时按币种分开展示、不跨币种求和。余额阈值只作用于当前账户，币种跟随该账户；不同币种账户分开统计。官方没有历史 token / 费用接口，界面明确显示「厂商未提供」，不会伪造为 0。
 - **OpenRouter**：需要 **Management Key**；读取 `GET /api/v1/credits` 与 `GET /api/v1/activity`。按日 / 模型展示 prompt、completion、reasoning、缓存 tokens、请求数与 usage 费用；BYOK 费用单独标注；用量窗口约最近 30 个 UTC 日；普通 API Key 会得到“需要 Management Key”的可操作提示。
 - **主看板**：总览、用量、额度、设置四个页签；7 / 30 / 90 天范围；按账户 / 模型筛选；费用按厂商堆叠、token 趋势、模型拆分、明细与占比；CSV 导出当前筛选。趋势图保留所选范围的全部日期，缺失日期留空且不补 0；当天无数据时直接显示空白并提示下一 UTC 日回填。
 - **预算与告警**：OpenRouter 本地月度预算（80% / 100%）、DeepSeek 余额低水位、连续 3 次同步失败、凭据失效、超过 2 个刷新周期未成功同步；应用内告警历史 + 本地通知；同一预算阈值同月只触发一次，余额回升后重新布防，同步失败冷却 6 小时。
 - **刷新**：全部 / 单账户手动刷新；自动刷新默认 15 分钟（5–60 分钟可配置）；指数退避与 Retry-After；同一账户 single-flight；同步不阻塞 UI。
-- **演示模式**：内置 DeepSeek / OpenRouter 模拟数据与告警，覆盖主要页面；所有演示内容持续标注「演示数据」，导出文件带 `demo` 标记；**不发起外部网络请求、不读写 Keychain、不打开真实数据库**。演示用量模拟 OpenRouter 真实窗口（仅最近 30 个完整 UTC 日，不含今天），因此「今日费用」等当天视图会如实显示空状态。
+- **演示模式**：内置 DeepSeek / OpenRouter 模拟数据与告警，覆盖主要页面；其中包含 CNY 与 USD 两个 DeepSeek 账户，用于展示账户级币种选择。所有演示内容持续标注「演示数据」，导出文件带 `demo` 标记；**不发起外部网络请求、不读写 Keychain、不打开真实数据库**。演示用量模拟 OpenRouter 真实窗口（仅最近 30 个完整 UTC 日，不含今天），因此「今日费用」等当天视图会如实显示空状态。
 
 界面效果（均为演示数据）：
 
@@ -68,6 +68,10 @@ open DSOverplay.app        # 启动菜单栏应用
 额度页将本机自然月预算与所选分析范围分开：预算使用率只按本机自然月统计，所选范围仅作独立参考，不参与告警。
 
 ![额度预算与所选范围](docs/screenshots/quota-budget.png)
+
+额度页按账户展示 DeepSeek 币种与阈值，两个账户的 CNY / USD 余额不会合并：
+
+![DeepSeek 多账户币种与阈值](docs/screenshots/quota-accounts.png)
 
 另有引导页与深色模式截图：`docs/screenshots/onboarding.png`、`docs/screenshots/dark-overview.png`。
 
@@ -94,6 +98,7 @@ open DSOverplay.app        # 启动菜单栏应用
 - 本 Issue 仅接入 DeepSeek 与 OpenRouter；OpenAI / Anthropic / Azure / Google / 内部网关连接器未实现。
 - DeepSeek 无历史用量 / 费用接口，只能展示余额快照，不提供 token 趋势或百分比额度。
 - OpenRouter activity 仅覆盖最近约 30 个 UTC 日；超出窗口不显示、不补 0。费用 / token 趋势图保留所选范围的全部日期，缺失日期留空；当天数据通常要到下一 UTC 日才可见。OpenRouter 金额为 USD，credits 与本地预算分开展示。
+- DeepSeek 每个账户只设置一个余额低水位阈值，币种必须与该账户余额接口返回的币种一致；若一个账户返回多个币种，可在这些币种中选择一个作为该账户的阈值。不同账户 / 币种不合并统计。
 - 月度预算按本机自然月聚合厂商 UTC 日桶，可能不含当天且仅覆盖约 30 天窗口；数据不完整时不触发预算告警。额度页同时展示「所选分析范围」的独立统计，并明确其不参与本地月度预算；发生跨月时不会把所选范围当作预算周期。预估值为线性外推，仅作参考。
 - 首版仅 Apple Silicon 构建；未提供 DMG、签名公证、自动更新与随系统启动。
 - 不支持跨币种换算或统一总额；不同币种分开展示。

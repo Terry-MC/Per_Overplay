@@ -67,6 +67,7 @@ enum AppActionError: LocalizedError {
     case emptyName
     case emptyKey
     case invalidAmount
+    case currencyMismatch(String)
     case storage(String)
 
     var errorDescription: String? {
@@ -75,6 +76,8 @@ enum AppActionError: LocalizedError {
         case .emptyName: return "账户名称不能为空"
         case .emptyKey: return "API Key 不能为空"
         case .invalidAmount: return "请输入大于 0 的金额"
+        case .currencyMismatch(let currencies):
+            return "该账户的余额币种为 \(currencies)，请选择对应币种"
         case .storage(let message): return message
         }
     }
@@ -106,6 +109,9 @@ final class AppModel: ObservableObject {
         didSet { validateUsageFilters() }
     }
     @Published var usageModelFilter: String?
+    @Published var balanceAccountFilter: String? {
+        didSet { validateBalanceFilter() }
+    }
 
     var onStatusChanged: (() -> Void)?
 
@@ -264,6 +270,7 @@ final class AppModel: ObservableObject {
                 self.selectedCurrency = nil
             }
             validateUsageFilters()
+            validateBalanceFilter()
             showOnboarding = !isDemo && loadedAccounts.isEmpty
             now = Date()
         } catch {
@@ -517,6 +524,10 @@ final class AppModel: ObservableObject {
         guard let amount = Money.parse(amountText), amount > 0 else {
             throw AppActionError.invalidAmount
         }
+        let accountCurrencies = Set(balanceCurrencies(for: account))
+        if !accountCurrencies.isEmpty, !accountCurrencies.contains(currency) {
+            throw AppActionError.currencyMismatch(accountCurrencies.sorted().joined(separator: " / "))
+        }
         try realStore.setBalanceThreshold(
             accountId: account.id,
             threshold: BalanceThreshold(amount: amount, currency: currency)
@@ -578,6 +589,13 @@ final class AppModel: ObservableObject {
             records = records.filter { $0.accountId == usageAccountFilter }
         }
         return Array(Set(records.map(\.model))).sorted()
+    }
+
+    private func validateBalanceFilter() {
+        if let balanceAccountFilter,
+           !balanceAccounts.contains(where: { $0.id == balanceAccountFilter }) {
+            self.balanceAccountFilter = nil
+        }
     }
 
     private func validateUsageFilters() {
@@ -645,14 +663,37 @@ final class AppModel: ObservableObject {
         return result
     }
 
+    var balanceAccounts: [Account] {
+        accounts.filter { $0.provider == .deepseek }
+    }
+
+    var selectedBalanceAccount: Account? {
+        guard let balanceAccountFilter else { return nil }
+        return balanceAccounts.first { $0.id == balanceAccountFilter }
+    }
+
     var officialBalances: [String: Decimal] {
-        var result: [String: Decimal] = [:]
-        for accountBalances in balances.values {
-            for balance in accountBalances.values {
-                result[balance.currency, default: 0] += balance.total
-            }
+        let ids: Set<String>
+        if let balanceAccountFilter {
+            ids = [balanceAccountFilter]
+        } else {
+            ids = Set(balanceAccounts.map(\.id))
         }
-        return result
+        return BalanceSummary.totalsByCurrency(balances: balances, accountIds: ids)
+    }
+
+    func balanceCurrencies(for account: Account) -> [String] {
+        BalanceSummary.currencies(for: latestBalances(for: account))
+    }
+
+    func currencyLabel(for account: Account) -> String {
+        switch account.provider {
+        case .deepseek:
+            let currencies = balanceCurrencies(for: account)
+            return currencies.isEmpty ? "币种待同步" : currencies.joined(separator: " / ")
+        case .openrouter:
+            return latestQuota(for: account)?.currency ?? account.provider.defaultCurrency
+        }
     }
 
     func budgetSpend(for account: Account) -> Decimal? {
@@ -943,6 +984,7 @@ final class AppModel: ObservableObject {
             selectedCurrency = nil
             usageAccountFilter = nil
             usageModelFilter = nil
+            balanceAccountFilter = nil
             reloadFromStore()
             showOnboarding = false
             showBanner("已进入演示模式：所有数据均为模拟数据", style: .info)
@@ -963,6 +1005,7 @@ final class AppModel: ObservableObject {
         selectedCurrency = nil
         usageAccountFilter = nil
         usageModelFilter = nil
+        balanceAccountFilter = nil
         reloadFromStore()
         syncEngine?.updateSettings(settings)
         syncEngine?.bootstrap(accounts: accounts)
@@ -997,6 +1040,7 @@ final class AppModel: ObservableObject {
         UserDefaults.standard.removeObject(forKey: Self.demoDisclaimerKey)
         selectedTab = .overview
         selectedCurrency = nil
+        balanceAccountFilter = nil
         syncingAccountIds.removeAll()
         settings = AppSettings()
         transport = URLSessionTransport()

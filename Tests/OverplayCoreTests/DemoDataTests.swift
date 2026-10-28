@@ -7,9 +7,21 @@ final class DemoDataTests: XCTestCase {
         let store = try DemoData.makeStore(now: now)
         XCTAssertTrue(store.isInMemory)
         let accounts = try store.accounts()
-        XCTAssertEqual(accounts.count, 2)
+        XCTAssertEqual(accounts.count, 3)
         XCTAssertTrue(accounts.allSatisfy(\.isDemo))
-        XCTAssertTrue(accounts.contains { $0.provider == .deepseek })
+        let deepSeekAccounts = accounts.filter { $0.provider == .deepseek }
+        XCTAssertEqual(deepSeekAccounts.count, 2)
+        var demoCurrencies = Set<String>()
+        for account in deepSeekAccounts {
+            let balances = try store.latestBalances(accountId: account.id)
+            XCTAssertEqual(balances.count, 1, "每个 DeepSeek 演示账户只应有一个币种")
+            if let currency = balances.keys.first {
+                demoCurrencies.insert(currency)
+                XCTAssertEqual(account.balanceThreshold?.currency, currency,
+                               "演示阈值必须跟随所在账户的币种")
+            }
+        }
+        XCTAssertEqual(demoCurrencies, Set(["CNY", "USD"]))
         XCTAssertTrue(accounts.contains { $0.provider == .openrouter })
 
         let usage = try store.usage()
@@ -43,8 +55,10 @@ final class DemoDataTests: XCTestCase {
 
         let quota = try store.latestQuota(accountId: "demo-openrouter")
         XCTAssertNotNil(quota)
-        let balances = try store.latestBalances(accountId: "demo-deepseek")
-        XCTAssertNotNil(balances["CNY"])
+        let cnyBalances = try store.latestBalances(accountId: "demo-deepseek")
+        XCTAssertNotNil(cnyBalances["CNY"])
+        let usdBalances = try store.latestBalances(accountId: "demo-deepseek-usd")
+        XCTAssertNotNil(usdBalances["USD"])
     }
 
     func testDemoDisclaimerIsComplete() {

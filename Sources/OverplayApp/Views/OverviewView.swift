@@ -10,6 +10,9 @@ struct OverviewView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
+            if !model.balanceAccounts.isEmpty {
+                balanceAccountPicker
+            }
             LazyVGrid(columns: metricColumns, alignment: .leading, spacing: 14) {
                 MetricCard(
                     title: "今日费用",
@@ -45,9 +48,10 @@ struct OverviewView: View {
                     title: "官方余额",
                     valueLines: model.officialBalances.isEmpty
                         ? [] : UIFormat.costLines(model.officialBalances),
-                    footnote: "DeepSeek 余额快照；仅反映官方余额，不代表 token 消耗。",
+                    footnote: officialBalanceFootnote,
                     symbol: "creditcard",
-                    isDemo: model.isDemo
+                    isDemo: model.isDemo,
+                    emptyText: model.selectedBalanceAccount == nil ? "无数据" : "该账户暂无余额"
                 )
                 MetricCard(
                     title: "本地预算剩余",
@@ -87,6 +91,41 @@ struct OverviewView: View {
 
             alertsSection
         }
+    }
+
+    private var balanceAccountPicker: some View {
+        HStack(spacing: 10) {
+            Label("官方余额账户", systemImage: "creditcard")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Picker("官方余额账户", selection: $model.balanceAccountFilter) {
+                Text("全部 DeepSeek 账户").tag(String?.none)
+                ForEach(model.balanceAccounts) { account in
+                    Text("\(account.displayName) · \(model.currencyLabel(for: account))")
+                        .tag(Optional(account.id))
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .frame(width: 260)
+            if let account = model.selectedBalanceAccount {
+                Text("当前仅显示该账户的 \(model.currencyLabel(for: account)) 余额")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("按币种分开，不跨币种求和")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+    }
+
+    private var officialBalanceFootnote: String {
+        if let account = model.selectedBalanceAccount {
+            return "仅显示 \(account.displayName)（\(model.currencyLabel(for: account))）的官方余额；不同币种账户分开统计。"
+        }
+        return "DeepSeek 各账户按币种分开展示，不跨币种求和；可在上方选择单个账户查看。"
     }
 
     private var hasOpenRouter: Bool {
@@ -193,6 +232,14 @@ struct AccountCardView: View {
         }
     }
 
+    private var accountSubtitle: String {
+        [
+            account.provider.displayName,
+            model.currencyLabel(for: account),
+            model.capabilitySummary(for: account)
+        ].joined(separator: " · ")
+    }
+
     private var header: some View {
         HStack(spacing: 10) {
             ProviderMark(provider: account.provider)
@@ -202,7 +249,7 @@ struct AccountCardView: View {
                         .font(.headline)
                     if model.isDemo || account.isDemo { DemoTag() }
                 }
-                Text(account.provider.displayName + " · " + model.capabilitySummary(for: account))
+                Text(accountSubtitle)
                     .font(.caption)
                     .foregroundStyle(account.credentialInvalid ? .red : .secondary)
             }
