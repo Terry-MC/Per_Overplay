@@ -109,6 +109,7 @@ final class AppModel: ObservableObject {
     }
     @Published var balanceCurrencyFilter: String?
     @Published var showMessageCenter = false
+    @Published var hasUnsavedChanges = false
 
     var onStatusChanged: (() -> Void)?
 
@@ -1013,7 +1014,13 @@ final class AppModel: ObservableObject {
 
     var hasCriticalAlert: Bool {
         alerts.contains {
-            !$0.acknowledged && [.budgetExceeded, .credentialInvalid, .syncFailed, .dataStale].contains($0.kind)
+            !$0.acknowledged && [.budgetExceeded, .balanceLow, .credentialInvalid, .syncFailed].contains($0.kind)
+        }
+    }
+
+    var hasWarningAlert: Bool {
+        alerts.contains {
+            !$0.acknowledged && [.budgetWarning, .dataStale].contains($0.kind)
         }
     }
 
@@ -1469,13 +1476,14 @@ final class AppModel: ObservableObject {
     }
 
     var statusBarTooltip: String {
-        if isDemo { return "Overplay · 演示数据" }
-        if hasCriticalAlert {
-            return "Overplay · 有未确认告警（\(unacknowledgedAlerts.count)）"
+        var parts: [String] = [isDemo ? "Overplay · 演示数据" : "Overplay"]
+        if unacknowledgedAlertCount > 0 {
+            parts.append(hasCriticalAlert ? "有未确认警戒/失败 \(unacknowledgedAlertCount) 条" : "有未确认告警 \(unacknowledgedAlertCount) 条")
+        } else if hasWarningAlert {
+            parts.append("有未确认告知")
+        } else if !accounts.isEmpty {
+            parts.append("\(accounts.count) 个账户")
         }
-        if !accounts.isEmpty {
-            return "Overplay · \(accounts.count) 个账户"
-        }
-        return "Overplay"
+        return parts.joined(separator: " · ")
     }
 }

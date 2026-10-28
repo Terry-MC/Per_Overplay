@@ -1,6 +1,6 @@
 # Overplay（构建产物：DSOverplay.app）
 
-macOS 14+ 菜单栏应用，统一查看 AI 平台的官方余额、credits、近 30 天用量与费用，支持本地预算 / 余额低水位告警、余额快照曲线、CSV 导出、演示模式与本地持久化。**真实连接器仅支持 DeepSeek 与 OpenRouter**；演示模式额外提供 Kimi、GLM、MiniMax、Qwen、豆包 Seed、腾讯混元、OpenAI GPT、Anthropic Claude、Google Gemini、Meta Llama、xAI Grok、Mistral 的虚拟数据，用于演示多平台 / 多账户 / 跨币种展示。
+macOS 14+ 菜单栏应用，提供常驻的**简略版悬浮窗**与**完整版主窗口**：悬浮窗用于快速查看今日费用、余额 / 额度、tokens 与告警，主窗口用于完整分析、额度、消息与设置。支持本地预算 / 余额低水位告警、余额快照曲线、CSV 导出、演示模式与本地持久化。**真实连接器仅支持 DeepSeek 与 OpenRouter**；演示模式额外提供 Kimi、GLM、MiniMax、Qwen、豆包 Seed、腾讯混元、OpenAI GPT、Anthropic Claude、Google Gemini、Meta Llama、xAI Grok、Mistral 的虚拟数据，用于演示多平台 / 多账户 / 跨币种展示。
 
 > 这个 demo 是用 DSH 测试开发的一个 demo，开源仅支持个人实践 / 学习，这个 demo 不可商用。
 > This demo is developed and tested with DSH. It is open-source for personal practice and learning only. Commercial use of this demo is prohibited.
@@ -14,7 +14,7 @@ macOS 14+ 菜单栏应用，统一查看 AI 平台的官方余额、credits、�
 open DSOverplay.app        # 启动菜单栏应用
 ```
 
-首次启动会展示引导。真实模式可添加 DeepSeek / OpenRouter 账户；演示模式（需先确认免责声明）内置 14 个平台的虚拟账户。菜单栏图标可打开摘要面板与主窗口；关闭主窗口只是隐藏，退出请使用面板 / 设置 / 托盘菜单中的「退出 Overplay」。
+首次启动会展示引导。真实模式可添加 DeepSeek / OpenRouter 账户；演示模式（需先确认免责声明）内置 14 个平台的虚拟账户。正常启动显示简略版悬浮窗；`--show` 可直接打开完整版主窗口。菜单栏图标左键 / 双击打开或前置悬浮窗，右键显示菜单；关闭主窗口只是隐藏。
 
 开发模式下可直接运行并输出调试信息：
 
@@ -44,31 +44,43 @@ open DSOverplay.app        # 启动菜单栏应用
 - 数据状态：真实 0、缺失、不可用、部分成功、失败 / 凭据失效、厂商余额异常；
 - 平台 / 账户范围聚合、跨币种隔离、额度与预算排除不完整账户、币种选项与默认选择；
 - 消息筛选、未确认计数、顶部队列上限、error 不自动消失、80% 倒计时与归档；
-- 演示数据 14 平台 / 16 账户 / 每账户 30 个完整 UTC 日且不含今天。
+- 演示数据 14 平台 / 16 账户 / 每账户 30 个完整 UTC 日且不含今天；
+- 悬浮窗位置 / 宽度 / 密度 / 收起状态持久化与多显示器钳制、简略版字段映射、退出清理顺序。
 
-当前共 **111 项 XCTest**，全部通过。
+当前共 **122 项 XCTest**，全部通过。
 
 ## 功能范围
 
 - **DeepSeek**：普通 API Key；`GET /user/balance` 读取总余额、赠送余额、充值余额与币种；每次成功同步保存快照，两次以上展示余额曲线。每个账户显示官方返回的账户币种；总览的「官方余额」卡片内提供紧凑币种下拉（如 `¥ CNY` / `$ USD`），默认 CNY，仅当当前范围实际返回多个币种时显示；选择 USD 账户会自动切到 USD，只显示所选币种，不混合其他币种。余额阈值只作用于当前账户，币种跟随该账户；不同币种账户分开统计。官方没有历史 token / 费用接口，界面明确显示「厂商未提供」，不会伪造为 0。
 - **OpenRouter**：需要 **Management Key**；读取 `GET /api/v1/credits` 与 `GET /api/v1/activity`。按日 / 模型展示 prompt、completion、reasoning、缓存 tokens、请求数与 usage 费用；BYOK 费用单独标注；用量窗口约最近 30 个 UTC 日；普通 API Key 会得到“需要 Management Key”的可操作提示。
-- **主看板**：总览、用量、额度、设置四个页签；消息中心是顶部 / 总览面板，不占用独立 Tab。总览顶部按已有账户生成平台按钮（All / 各平台，横向滚动），选中平台后账户列表与费用、tokens、官方余额、credits、本地预算都按平台过滤；平台内有多个账户时显示“全部 / 指定账户”chips，名称使用用户自定义账户名。跨平台、跨币种不混算。7 / 30 / 90 天范围；按账户 / 模型筛选；费用按厂商堆叠、token 趋势、模型拆分、明细与占比；CSV 导出当前筛选。趋势图保留所选范围的全部日期，缺失日期留空且不补 0；当天无数据时直接显示空白并提示下一 UTC 日回填。
+- **简略版悬浮窗**：无边框、置顶、非激活式、可拖动的常驻窗口；支持完整 / 压缩两档密度。顶部四个按钮为退出、折叠、收起、打开完整版；全局摘要显示今日费用（分币种）、官方余额 / 额度、Token 总量与覆盖率、请求数、告警状态 / 未确认数与最后同步时间；账户列表固定状态栏、内部滚动。缺失数据使用空状态，不显示 0。收起后仅保留托盘，轮询与告警继续；重启恢复位置、宽度、密度与收起状态，屏幕变化后自动钳制到可见区域。
+- **托盘**：菜单栏状态项常驻，左键 / 双击打开或前置悬浮窗（收起时恢复），右键菜单提供打开悬浮窗、打开主窗口、打开快捷面板、刷新全部、设置与退出。图标使用模板 SF Symbol（矢量图，系统按菜单栏 16 / 18 / 22 / 44 px 与 @2x 自动渲染，无位图裁切），按正常 / 告知 / 警戒 / 失败切换形状与颜色，并提供 tooltip。
+- **简略 / 完整双向切换**：悬浮窗“打开完整版”或编辑按钮打开主窗口；主窗口“简略版”按钮或关闭主窗口返回悬浮窗（若未收起）；托盘同时提供两个入口，复用同一数据 / 同步 / 告警引擎，不重建数据或重复请求。
+- **主看板**：完整版主窗口保留总览、用量、额度、设置四个页签（本 issue 不新增五 Tab / 基础信息 / 新增厂商）；消息中心是顶部 / 总览面板，不占用独立 Tab。总览顶部按已有账户生成平台按钮（All / 各平台，横向滚动），选中平台后账户列表与费用、tokens、官方余额、credits、本地预算都按平台过滤；平台内有多个账户时显示“全部 / 指定账户”chips，名称使用用户自定义账户名。跨平台、跨币种不混算。7 / 30 / 90 天范围；按账户 / 模型筛选；费用按厂商堆叠、token 趋势、模型拆分、明细与占比；CSV 导出当前筛选。趋势图保留所选范围的全部日期，缺失日期留空且不补 0；当天无数据时直接显示空白并提示下一 UTC 日回填。
 - **数据状态**：只有厂商明确返回 0 时才显示真实的 0；缺失、不可用、未同步、部分成功、同步失败或凭据失效显示「无数据 / 不可用 / 暂无完整数据 / 同步失败」等空状态与原因，不使用 `0`、`0?` 或 `0%` 占位。部分成功 / 缺失数据不参与预算、额度使用率或阈值告警计算。
 - **消息中心**：顶部最多同时显示 3 条消息并叠加显示，不挤压布局；error 类消息（预算已用尽、余额低于阈值、同步失败、凭据失效）需手动关闭，预算 80% 通知倒计时后归档，普通告知倒计时后关闭，不显示进度条。消息中心从顶部消息、总览或额度页打开，支持搜索、类型 / 账户 / 状态 / 时间筛选、确认与未确认计数；Overview / Quota 不再各自维护旧告警列表。演示来源消息持续标注「演示数据」。
 - **预算与告警**：本地月度预算（80% / 100%；真实模式当前为 OpenRouter，演示模式还覆盖 Kimi、GLM、Qwen、OpenAI、Anthropic、Mistral）、DeepSeek 余额低水位、连续 3 次同步失败、凭据失效、超过 2 个刷新周期未成功同步；应用内消息中心 + 本地通知；同一预算阈值同月只触发一次，余额回升后重新布防，同步失败冷却 6 小时。
 - **刷新**：全部 / 单账户手动刷新；自动刷新默认 15 分钟（5–60 分钟可配置）；指数退避与 Retry-After；同一账户 single-flight；同步不阻塞 UI。
-- **演示模式**：内置 **14 个平台 / 16 个账户**、30 个完整 UTC 日的虚拟数据与告警；DeepSeek 含 CNY / USD 两个账户，Kimi 含主账户 / 团队账户；其余平台包括 OpenRouter、GLM、MiniMax、Qwen、豆包 Seed、腾讯混元、OpenAI GPT、Anthropic Claude、Google Gemini、Meta Llama、xAI Grok、Mistral。所有演示内容持续标注「演示数据」，导出文件带 `demo` 标记；**不发起外部网络请求、不读写 Keychain、不打开真实数据库**。演示用量仅覆盖最近 30 个完整 UTC 日（不含今天），因此「今日费用」等当天视图会如实显示空状态。
+- **退出**：悬浮窗关闭、托盘、设置页、菜单栏与系统退出统一清理；停止定时器 / 请求、保存窗口状态、关闭窗口并移除托盘；无未保存内容时不额外阻断退出。
+- **演示模式**：悬浮窗、托盘和主窗口共享 14 个平台 / 16 个账户、30 个完整 UTC 日的虚拟数据与告警；DeepSeek 含 CNY / USD 两个账户，Kimi 含主账户 / 团队账户；其余平台包括 OpenRouter、GLM、MiniMax、Qwen、豆包 Seed、腾讯混元、OpenAI GPT、Anthropic Claude、Google Gemini、Meta Llama、xAI Grok、Mistral。所有演示内容持续标注「演示数据」，导出文件带 `demo` 标记；**不发起外部网络请求、不读写 Keychain、不打开真实数据库**。演示用量仅覆盖最近 30 个完整 UTC 日（不含今天），因此「今日费用」等当天视图会如实显示空状态。
 
 界面效果（均为演示数据）：
 
-| 总览（All / 平台栏） | 平台选中与账户 chips |
+| 简略版悬浮窗（展开） | 简略版悬浮窗（压缩） |
 | --- | --- |
-| ![总览](docs/screenshots/overview.png) | ![平台与账户 chips](docs/screenshots/platform-accounts.png) |
+| ![悬浮窗展开](docs/screenshots/floating-expanded.png) | ![悬浮窗压缩](docs/screenshots/floating-compact.png) |
 
-| 官方余额币种下拉（DeepSeek All） | 空状态：无数据 / 不可用 |
+| 托盘右键菜单 | 总览（All / 平台栏） |
 | --- | --- |
-| ![官方余额币种下拉](docs/screenshots/balance-currency.png) | ![空状态](docs/screenshots/empty-state.png) |
+| ![托盘菜单](docs/screenshots/tray-menu.png) | ![总览](docs/screenshots/overview.png) |
 
+| 平台选中与账户 chips | 官方余额币种下拉（DeepSeek All） |
+| --- | --- |
+| ![平台与账户 chips](docs/screenshots/platform-accounts.png) | ![官方余额币种下拉](docs/screenshots/balance-currency.png) |
+
+| 空状态：无数据 / 不可用 | 设置 |
+| --- | --- |
+| ![空状态](docs/screenshots/empty-state.png) | ![设置](docs/screenshots/settings.png) |
 | 顶部消息（最多 3 条；error 手动关闭） | 消息中心面板（无独立 Tab，可筛选 / 确认） |
 | --- | --- |
 | ![顶部消息](docs/screenshots/messages-toasts.png) | ![消息中心](docs/screenshots/messages.png) |
@@ -76,8 +88,6 @@ open DSOverplay.app        # 启动菜单栏应用
 | 用量（多平台堆叠） | 额度 |
 | --- | --- |
 | ![用量](docs/screenshots/usage.png) | ![额度](docs/screenshots/quota.png) |
-
-![设置](docs/screenshots/settings.png)
 
 额度页按账户展示 DeepSeek 币种与阈值，两个账户的 CNY / USD 余额不会合并；部分成功或缺失数据不计算使用率 / 剩余 / 预估。
 
