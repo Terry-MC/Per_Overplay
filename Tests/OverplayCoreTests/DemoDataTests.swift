@@ -22,6 +22,20 @@ final class DemoDataTests: XCTestCase {
         XCTAssertTrue(alerts.allSatisfy(\.isDemo))
         XCTAssertTrue(alerts.contains { $0.kind == .balanceLow })
 
+        let openRouter = try XCTUnwrap(accounts.first { $0.provider == .openrouter })
+        let monthSpend = try store.monthSpend(
+            accountId: openRouter.id,
+            currency: "USD",
+            now: now
+        )
+        let ratio = Money.percent(monthSpend / (openRouter.budget?.amount ?? 1) * 100)
+        let budgetAlerts = alerts.filter {
+            $0.kind == .budgetWarning || $0.kind == .budgetExceeded
+        }
+        XCTAssertFalse(budgetAlerts.isEmpty)
+        XCTAssertTrue(budgetAlerts.allSatisfy { $0.value == ratio },
+                      "demo 告警百分比必须与同一预算计算口径一致")
+
         let quota = try store.latestQuota(accountId: "demo-openrouter")
         XCTAssertNotNil(quota)
         let balances = try store.latestBalances(accountId: "demo-deepseek")

@@ -12,9 +12,6 @@ public enum DemoData {
     public static func makeStore(now: Date = Date()) throws -> OverplayStore {
         let store = try OverplayStore.inMemory()
         let calendar = Calendar.current
-        let monthStart = calendar.date(
-            from: calendar.dateComponents([.year, .month], from: now)
-        ) ?? now
         let demoDeepSeek = Account(
             id: "demo-deepseek",
             provider: .deepseek,
@@ -104,10 +101,11 @@ public enum DemoData {
         }
         try store.upsertUsage(usage, accountName: demoOpenRouter.displayName)
 
-        let monthSpend = usage
-            .filter { $0.accountId == demoOpenRouter.id }
-            .filter { $0.day >= CalendarDay.string(for: monthStart, timeZone: CalendarDay.utc, calendar: calendar) }
-            .reduce(Decimal(0)) { $0 + ($1.cost ?? 0) }
+        let monthSpend = try store.monthSpend(
+            accountId: demoOpenRouter.id,
+            currency: "USD",
+            now: now
+        )
         let latestBalance = BalanceSnapshot(
             accountId: demoDeepSeek.id,
             currency: "CNY",
