@@ -373,8 +373,14 @@ public final class SyncEngine {
         withLock {
             let interval = settings.refreshInterval
             switch outcome.status {
-            case .success, .partial:
+            case .success:
                 nextDue[accountId] = now.addingTimeInterval(interval)
+            case .partial:
+                if let retryAfter = outcome.retryAfter {
+                    nextDue[accountId] = now.addingTimeInterval(min(max(retryAfter, 60), 3600))
+                } else {
+                    nextDue[accountId] = now.addingTimeInterval(interval)
+                }
             case .invalidCredential:
                 nextDue[accountId] = .distantFuture
             case .rateLimited:

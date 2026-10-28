@@ -160,4 +160,32 @@ final class SyncSchedulingTests: XCTestCase {
         await waitUntilIdle(engine, accountId: second.id)
         XCTAssertEqual(transport.requestCount, 2)
     }
+    func testActivityRetryAfterDelaysPartialResult() async throws {
+        let account = try store.insertTestAccount(provider: .openrouter, name: "OR")
+        try keychain.setCredential("mgmt", accountId: account.id)
+        let credits = response(200, body: #"{"data":{"total_credits":10,"total_usage":1}}"#)
+        let activityLimited = response(429, headers: ["Retry-After": "90"])
+        let activityOK = response(200, body: #"{"data":[]}"#)
+        let transport = FakeHTTPTransport([credits, activityLimited, credits, activityOK])
+        let engine = makeEngine(transport)
+        engine.bootstrap(accounts: [account], now: t0)
+
+        engine.refreshDue(accounts: [account], now: t0)
+        await waitForRequest(transport, count: 2)
+        await waitUntilIdle(engine, accountId: account.id)
+        let partial = try XCTUnwrap(try store.account(id: account.id))
+        XCTAssertNotNil(partial.lastError)
+        XCTAssertEqual(partial.lastSuccessAt, t0)
+
+        engine.refreshDue(accounts: [partial], now: t0.addingTimeInterval(89))
+        try? await Task.sleep(nanoseconds: 120_000_000)
+        XCTAssertEqual(transport.requestCount, 2, "activity 429 的 Retry-After 应推迟部分成功后的重试")
+
+        engine.refreshDue(accounts: [partial], now: t0.addingTimeInterval(91))
+        await waitForRequest(transport, count: 4)
+        await waitUntilIdle(engine, accountId: account.id)
+        XCTAssertEqual(transport.requestCount, 4)
+        XCTAssertNil(try store.account(id: account.id)?.lastError)
+    }
+
 }

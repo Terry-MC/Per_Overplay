@@ -302,6 +302,7 @@ public final class OpenRouterConnector: ProviderConnector {
                 return SyncOutcome(
                     status: .partial,
                     error: failure.message,
+                    retryAfter: failure.retryAfter,
                     capabilities: ProviderKind.openrouter.capabilities,
                     quotaSnapshot: quota,
                     usageRecords: [],
@@ -393,6 +394,19 @@ public final class OpenRouterConnector: ProviderConnector {
         let message: String
         let category: ConnectionTestResult.Category
         let status: Int
+        let retryAfter: TimeInterval?
+
+        init(
+            message: String,
+            category: ConnectionTestResult.Category,
+            status: Int,
+            retryAfter: TimeInterval? = nil
+        ) {
+            self.message = message
+            self.category = category
+            self.status = status
+            self.retryAfter = retryAfter
+        }
     }
 
     private func fetchActivity(
@@ -431,7 +445,8 @@ public final class OpenRouterConnector: ProviderConnector {
         case 429:
             return .failure(ActivityFailure(
                 message: rateLimitMessage(retryAfter: response.retryAfter),
-                category: .rateLimited, status: response.status
+                category: .rateLimited, status: response.status,
+                retryAfter: response.retryAfter
             ))
         default:
             var message = "OpenRouter activity 请求失败（HTTP \(response.status)）"
