@@ -1,18 +1,18 @@
 import SwiftUI
 import OverplayCore
 
-struct FloatingPanelView: View {
-    @ObservedObject var model: AppModel
-    @ObservedObject var visibility: FloatingPanelVisibility
-    let density: FloatingDensity
-    let onClose: () -> Void
-    let onToggleDensity: () -> Void
-    let onCollapse: () -> Void
-    let onOpenMain: () -> Void
-    let onOpenMessages: () -> Void
+/// Keeps the last summary while the panel is hidden. The content view stays
+/// mounted so the scroll position survives hide/show; skipping the builder
+/// keeps the hidden panel from recomputing on every model tick.
+@MainActor
+final class FloatingSummaryCache {
+    private var cached: FloatingSummary?
+    private(set) var buildCount = 0
 
-    private var summary: FloatingSummary {
-        FloatingSummaryBuilder.make(
+    func summary(for model: AppModel, isVisible: Bool) -> FloatingSummary {
+        if !isVisible, let cached { return cached }
+        buildCount += 1
+        let summary = FloatingSummaryBuilder.make(
             accounts: model.accounts,
             usageRecords: model.usageRecords,
             balances: model.balances,
@@ -20,24 +20,38 @@ struct FloatingPanelView: View {
             alerts: model.alerts,
             now: model.now
         )
+        cached = summary
+        return summary
+    }
+}
+
+struct FloatingPanelView: View {
+    @ObservedObject var model: AppModel
+    @ObservedObject var visibility: FloatingPanelVisibility
+    let density: FloatingDensity
+    let summaryCache: FloatingSummaryCache
+    let onClose: () -> Void
+    let onToggleDensity: () -> Void
+    let onCollapse: () -> Void
+    let onOpenMain: () -> Void
+    let onOpenMessages: () -> Void
+
+    private var summary: FloatingSummary {
+        summaryCache.summary(for: model, isVisible: visibility.isVisible)
     }
 
     var body: some View {
-        Group {
-            if visibility.isVisible {
-                panelContent
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.regularMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
-        )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .preferredColorScheme(nil)
+        panelContent
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.regularMaterial)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .preferredColorScheme(nil)
     }
 
     private var panelContent: some View {

@@ -8,9 +8,9 @@ final class FloatingPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-/// Drives whether the floating panel renders its content. While the panel is
-/// hidden or collapsed SwiftUI still receives model updates every 3 seconds,
-/// so the content subtree stays out of the hierarchy until it is visible again.
+/// Drives whether the floating panel refreshes its summary. The content
+/// subtree stays mounted while hidden so AppKit keeps the scroll offset; the
+/// summary cache skips rebuilding while `isVisible` is false.
 @MainActor
 final class FloatingPanelVisibility: ObservableObject {
     @Published var isVisible: Bool
@@ -27,6 +27,7 @@ final class FloatingWindowController: NSObject, NSWindowDelegate {
     private var hosting: NSHostingView<FloatingPanelView>!
     private let store: FloatingWindowStateStore
     private let visibility: FloatingPanelVisibility
+    private let summaryCache = FloatingSummaryCache()
     private var state: FloatingWindowState
     private var isAdjustingFrame = false
     private let onClose: () -> Void
@@ -77,6 +78,44 @@ final class FloatingWindowController: NSObject, NSWindowDelegate {
 
     var density: FloatingDensity {
         state.density
+    }
+
+    var summaryBuildCountForSmoke: Int {
+        summaryCache.buildCount
+    }
+
+    var scrollOffsetForSmoke: CGPoint? {
+        floatingScrollView?.contentView.bounds.origin
+    }
+
+    @discardableResult
+    func setScrollOffsetForSmoke(_ offset: CGPoint) -> CGPoint? {
+        hosting.layoutSubtreeIfNeeded()
+        guard let scrollView = floatingScrollView else { return nil }
+        let clip = scrollView.contentView
+        clip.scroll(to: offset)
+        scrollView.reflectScrolledClipView(clip)
+        return clip.bounds.origin
+    }
+
+    private var floatingScrollView: NSScrollView? {
+        guard let contentView = panel.contentView else { return nil }
+        var candidates: [NSScrollView] = []
+        func walk(_ view: NSView) {
+            if let scrollView = view as? NSScrollView {
+                candidates.append(scrollView)
+            }
+            for subview in view.subviews { walk(subview) }
+        }
+        walk(contentView)
+        return candidates.max {
+            verticalOverflow($0) < verticalOverflow($1)
+        }
+    }
+
+    private func verticalOverflow(_ scrollView: NSScrollView) -> CGFloat {
+        guard let documentView = scrollView.documentView else { return 0 }
+        return max(0, documentView.bounds.height - scrollView.contentView.bounds.height)
     }
 
     func showIfNotCollapsed() {
@@ -170,6 +209,7 @@ final class FloatingWindowController: NSObject, NSWindowDelegate {
             model: model,
             visibility: visibility,
             density: state.density,
+            summaryCache: summaryCache,
             onClose: onClose,
             onToggleDensity: { [weak self] in self?.toggleDensity() },
             onCollapse: { [weak self] in self?.collapse() },

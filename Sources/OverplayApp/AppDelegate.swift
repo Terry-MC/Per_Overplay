@@ -370,17 +370,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showFloatingWindow()
         checks.append(("floatingVisible", floatingController.isVisible))
         checks.append(("mainHidden", windowController.window?.isVisible == false))
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        let scrollStart = floatingController.setScrollOffsetForSmoke(CGPoint(x: 0, y: 140))
+        checks.append(("scrollPrepared", (scrollStart?.y ?? 0) > 0))
+        let summaryBuildBaseline = floatingController.summaryBuildCountForSmoke
+
+        showMainWindow(tab: .overview)
+        try? await Task.sleep(nanoseconds: 3_200_000_000)
+        let summaryBuildsWhileHidden = floatingController.summaryBuildCountForSmoke
+        checks.append(("noSummaryRebuildWhileHidden", summaryBuildsWhileHidden == summaryBuildBaseline))
+
+        showFloatingWindow()
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        let scrollAfterSwitch = floatingController.scrollOffsetForSmoke
+        checks.append(("scrollPreservedAcrossSwitch", scrollOffsetsMatch(scrollStart, scrollAfterSwitch)))
+        checks.append(("summaryRebuiltOnShow", floatingController.summaryBuildCountForSmoke > summaryBuildsWhileHidden))
+
+        floatingController.collapse()
+        checks.append(("collapsed", !floatingController.isVisible))
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        showFloatingWindow()
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        let scrollAfterCollapse = floatingController.scrollOffsetForSmoke
+        checks.append(("restoredFromCollapse", floatingController.isVisible))
+        checks.append(("scrollPreservedAcrossCollapse", scrollOffsetsMatch(scrollStart, scrollAfterCollapse)))
 
         let initialDensity = floatingController.density
         floatingController.toggleDensity()
         checks.append(("densityChanged", floatingController.density != initialDensity))
         floatingController.toggleDensity()
         checks.append(("densityRestored", floatingController.density == initialDensity))
-
-        floatingController.collapse()
-        checks.append(("collapsed", !floatingController.isVisible))
-        showFloatingWindow()
-        checks.append(("restoredFromCollapse", floatingController.isVisible))
 
         statusBarController.openMenuPanel()
         try? await Task.sleep(nanoseconds: 400_000_000)
@@ -394,9 +414,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let failed = checks.filter { !$0.1 }.map(\.0)
         let detail = checks.map { "\($0.0)=\($0.1)" }.joined(separator: " ")
-        print("SWITCH_SMOKE \(failed.isEmpty ? "PASS" : "FAIL") \(detail) refreshInvocations=\(refreshDelta) networkRequests=\(networkDelta)")
+        let scrollDetail = "scrollStart=\(pointDescription(scrollStart)) scrollAfterSwitch=\(pointDescription(scrollAfterSwitch)) scrollAfterCollapse=\(pointDescription(scrollAfterCollapse)) summaryBuilds=\(summaryBuildBaseline)/\(summaryBuildsWhileHidden)/\(floatingController.summaryBuildCountForSmoke)"
+        print("SWITCH_SMOKE \(failed.isEmpty ? "PASS" : "FAIL") \(detail) \(scrollDetail) refreshInvocations=\(refreshDelta) networkRequests=\(networkDelta)")
         fflush(stdout)
         exit(failed.isEmpty ? 0 : 1)
+    }
+
+    private func scrollOffsetsMatch(_ lhs: CGPoint?, _ rhs: CGPoint?) -> Bool {
+        guard let lhs, let rhs else { return false }
+        return abs(lhs.x - rhs.x) <= 1 && abs(lhs.y - rhs.y) <= 1
+    }
+
+    private func pointDescription(_ point: CGPoint?) -> String {
+        guard let point else { return "nil" }
+        return String(format: "%.1f,%.1f", point.x, point.y)
     }
 
     private func runSnapshots() async {
