@@ -129,6 +129,7 @@ public enum AccountDataStatus {
         let reasons = statuses.compactMap(\.reason)
         let joined = reasons.joined(separator: "；")
         if statuses.contains(where: \.isActual) { return .partial(joined) }
+        if statuses.contains(where: \.isPartial) { return .partial(joined) }
         if statuses.contains(where: \.isFailed) { return .failed(joined) }
         if statuses.contains(where: \.isAnomaly) { return .anomaly(joined) }
         if statuses.allSatisfy(\.isUnavailable) { return .unavailable(joined) }

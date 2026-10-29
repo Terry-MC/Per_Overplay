@@ -7,11 +7,22 @@ final class StatusBarController: NSObject {
     private let statusItem: NSStatusItem
     private let popover = NSPopover()
     private let model: AppModel
+    private let openFloating: () -> Void
     private let openMain: (DashboardTab) -> Void
+    private let onQuit: () -> Void
+    private var lastPresentation: StatusItemPresentation?
+    private var lastTooltip: String?
 
-    init(model: AppModel, openMain: @escaping (DashboardTab) -> Void) {
+    init(
+        model: AppModel,
+        openFloating: @escaping () -> Void,
+        openMain: @escaping (DashboardTab) -> Void,
+        onQuit: @escaping () -> Void
+    ) {
         self.model = model
+        self.openFloating = openFloating
         self.openMain = openMain
+        self.onQuit = onQuit
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
         configureStatusItem()
@@ -26,9 +37,27 @@ final class StatusBarController: NSObject {
         statusItem.isVisible
     }
 
+    var statusItemScreenFrame: CGRect? {
+        guard let button = statusItem.button, let window = button.window else { return nil }
+        return window.convertToScreen(button.convert(button.bounds, to: nil))
+    }
+
+    var isMenuPanelShown: Bool {
+        popover.isShown
+    }
+
     func openMenuPanel() {
         guard !popover.isShown else { return }
         togglePopover()
+    }
+
+    func closeMenuPanel() {
+        popover.performClose(nil)
+    }
+
+    func removeStatusItem() {
+        popover.performClose(nil)
+        NSStatusBar.system.removeStatusItem(statusItem)
     }
 
     private func configureStatusItem() {
@@ -50,7 +79,7 @@ final class StatusBarController: NSObject {
             quit: { [weak self] in
                 guard let self else { return }
                 self.popover.performClose(nil)
-                AppPanels.confirmQuit(model: self.model)
+                self.onQuit()
             }
         )
         popover.contentViewController = NSHostingController(rootView: root)
@@ -61,22 +90,44 @@ final class StatusBarController: NSObject {
 
     private func updateStatusItem() {
         guard let button = statusItem.button else { return }
-        let symbol: String
-        if model.isDemo {
-            symbol = "flask.fill"
-            button.contentTintColor = .systemOrange
-        } else if model.hasCriticalAlert {
-            symbol = "exclamationmark.triangle.fill"
+        let presentation = StatusItemPresentation.make(
+            isDemo: model.isDemo,
+            alerts: model.alerts
+        )
+        let tooltip = model.statusBarTooltip
+        guard presentation != lastPresentation || tooltip != lastTooltip else { return }
+        lastPresentation = presentation
+        lastTooltip = tooltip
+        switch presentation.severity {
+        case .failure, .critical:
             button.contentTintColor = .systemRed
-        } else {
-            symbol = "chart.bar.xaxis"
-            button.contentTintColor = nil
+        case .warning:
+            button.contentTintColor = .systemOrange
+        case .normal:
+            button.contentTintColor = presentation.showsDemoBadge ? .systemOrange : nil
         }
-        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Overplay")
+        let image = NSImage(
+            systemSymbolName: presentation.symbolName,
+            accessibilityDescription: presentation.accessibilityLabel
+        )
         image?.isTemplate = true
         button.image = image
-        button.title = image == nil ? "OV" : ""
-        button.toolTip = model.statusBarTooltip
+        if presentation.showsDemoBadge {
+            button.imagePosition = .imageLeading
+            button.attributedTitle = NSAttributedString(
+                string: image == nil ? "OV · 演示" : "演示",
+                attributes: [
+                    .foregroundColor: NSColor.labelColor,
+                    .font: NSFont.menuBarFont(ofSize: 0)
+                ]
+            )
+        } else {
+            button.imagePosition = .imageOnly
+            button.title = image == nil ? "OV" : ""
+        }
+        button.toolTip = tooltip
+        button.setAccessibilityLabel(presentation.accessibilityLabel)
+        button.setAccessibilityHelp(tooltip)
     }
 
     @objc private func statusItemClicked(_ sender: Any?) {
@@ -84,7 +135,7 @@ final class StatusBarController: NSObject {
         if isRightClick {
             showContextMenu()
         } else {
-            togglePopover()
+            openFloating()
         }
     }
 
@@ -102,10 +153,24 @@ final class StatusBarController: NSObject {
     private func showContextMenu() {
         guard let button = statusItem.button else { return }
         let menu = NSMenu()
-        menu.addItem(withTitle: "打开主界面", action: #selector(openDashboard), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "打开设置", action: #selector(openSettings), keyEquivalent: "").target = self
+        menu.autoenablesItems = false
+        if model.isDemo {
+            let demoItem = menu.addItem(
+                withTitle: "演示数据 · 不发起网络请求",
+                action: nil,
+                keyEquivalent: ""
+            )
+            demoItem.isEnabled = false
+            menu.addItem(.separator())
+        }
+        menu.addItem(withTitle: "打开悬浮窗", action: #selector(openFloatingWindow), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "打开主窗口", action: #selector(openDashboard), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "打开快捷面板", action: #selector(openQuickPanel), keyEquivalent: "").target = self
         menu.addItem(.separator())
-        menu.addItem(withTitle: "刷新全部", action: #selector(refreshAll), keyEquivalent: "").target = self
+        let refreshItem = menu.addItem(withTitle: "刷新全部", action: #selector(refreshAll), keyEquivalent: "")
+        refreshItem.target = self
+        refreshItem.isEnabled = !model.isDemo && !model.accounts.isEmpty
+        menu.addItem(withTitle: "设置…", action: #selector(openSettings), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "退出 Overplay", action: #selector(quitApp), keyEquivalent: "q").target = self
         menu.popUp(
@@ -115,8 +180,16 @@ final class StatusBarController: NSObject {
         )
     }
 
+    @objc private func openFloatingWindow() {
+        openFloating()
+    }
+
     @objc private func openDashboard() {
         openMain(.overview)
+    }
+
+    @objc private func openQuickPanel() {
+        togglePopover()
     }
 
     @objc private func openSettings() {
@@ -128,6 +201,6 @@ final class StatusBarController: NSObject {
     }
 
     @objc private func quitApp() {
-        AppPanels.confirmQuit(model: model)
+        onQuit()
     }
 }

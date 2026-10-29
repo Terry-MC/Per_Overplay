@@ -19,7 +19,11 @@ struct LaunchOptions {
     var benchmark = false
     var scrollBottom = false
     var showMessages = false
+    var printStatusFrame = false
     var suppressToasts = false
+    var switchSmoke = false
+    var collapseFloating = false
+    var autoQuitAfter: Double?
 
     static func parse(_ arguments: [String]) -> LaunchOptions {
         var options = LaunchOptions()
@@ -66,8 +70,17 @@ struct LaunchOptions {
                 options.scrollBottom = true
             case "--show-messages":
                 options.showMessages = true
+            case "--print-status-frame":
+                options.printStatusFrame = true
             case "--no-toasts":
                 options.suppressToasts = true
+            case "--switch-smoke":
+                options.switchSmoke = true
+            case "--collapse-floating":
+                options.collapseFloating = true
+            case "--auto-quit-after" where index + 1 < arguments.count:
+                index += 1
+                options.autoQuitAfter = Double(arguments[index])
             default:
                 break
             }
@@ -81,11 +94,19 @@ struct LaunchOptions {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static var launchTimestamp = Date()
 
+    private enum ViewMode {
+        case floating
+        case main
+    }
+
     private var model: AppModel!
     private var statusBarController: StatusBarController!
     private var windowController: DashboardWindowController!
+    private var floatingController: FloatingWindowController!
     private var options = LaunchOptions()
     private var windowShownAt: Date?
+    private var viewMode: ViewMode = .floating
+    private var shutdownSequence: ShutdownSequence?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         options = LaunchOptions.parse(CommandLine.arguments)
@@ -106,15 +127,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 model.overviewAccountFilter = account
             }
         }
-        windowController = DashboardWindowController(model: model)
-        statusBarController = StatusBarController(model: model) { [weak self] tab in
-            self?.showMainWindow(tab: tab)
-        }
+        windowController = DashboardWindowController(
+            model: model,
+            onSwitchToFloating: { [weak self] in
+                self?.showFloatingWindow()
+            },
+            onHide: { [weak self] in
+                self?.mainWindowDidHide()
+            }
+        )
+        floatingController = FloatingWindowController(
+            model: model,
+            onClose: { [weak self] in
+                self?.requestTermination()
+            },
+            onOpenMain: { [weak self] in
+                self?.showMainWindow(tab: .overview)
+            },
+            onOpenMessages: { [weak self] in
+                self?.showMainWindow(tab: .overview)
+                self?.model.showMessageCenter = true
+            }
+        )
+        statusBarController = StatusBarController(
+            model: model,
+            openFloating: { [weak self] in
+                self?.showFloatingWindow()
+            },
+            openMain: { [weak self] tab in
+                self?.showMainWindow(tab: tab)
+            },
+            onQuit: { [weak self] in
+                self?.requestTermination()
+            }
+        )
+        shutdownSequence = ShutdownSequence(actions: [
+            ("stop-timers-and-requests", { [weak self] in self?.model.prepareForTermination() }),
+            ("save-window-state", { [weak self] in self?.floatingController.persistCurrentState() }),
+            ("close-windows", { [weak self] in
+                self?.windowController.window?.orderOut(nil)
+                self?.floatingController.hideForMain()
+            }),
+            ("remove-status-item", { [weak self] in self?.statusBarController.removeStatusItem() })
+        ])
         model.start()
 
         let isSnapshotMode = options.snapshotPath != nil || options.snapshotDirectory != nil
-        if options.showWindow || options.demo || isSnapshotMode || options.uiSmoke || options.benchmark || model.showOnboarding {
+        let showMainAtLaunch = options.showWindow || isSnapshotMode || options.uiSmoke
+            || options.switchSmoke || options.benchmark || model.showOnboarding
+        if options.collapseFloating {
+            viewMode = .floating
+            floatingController.collapse()
+        } else if showMainAtLaunch {
             showMainWindow(tab: options.tab)
+        } else {
+            viewMode = .floating
+            floatingController.showIfNotCollapsed()
         }
         if let height = options.windowHeight {
             windowController.setContentSize(width: 1280, height: height)
@@ -123,8 +191,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         if options.showMessages {
+            showMainWindow(tab: options.tab)
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
                 self?.model.showMessageCenter = true
+            }
+        }
+        if options.printStatusFrame {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                guard let frame = self?.statusBarController.statusItemScreenFrame else { return }
+                print("STATUS_FRAME \(frame.origin.x) \(frame.origin.y) \(frame.width) \(frame.height)")
+                fflush(stdout)
             }
         }
         if isSnapshotMode {
@@ -132,6 +208,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if options.uiSmoke {
             Task { await runUISmoke() }
+        }
+        if options.switchSmoke {
+            Task { await runSwitchSmoke() }
+        }
+        if let seconds = options.autoQuitAfter {
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+                NSApp.terminate(nil)
+            }
         }
         if options.showMenuPanel {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
@@ -173,14 +257,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        model?.prepareForTermination()
+        shutdownSequence?.runIfNeeded()
     }
 
     private func showMainWindow(tab: DashboardTab) {
+        floatingController?.hideForMain()
+        viewMode = .main
         model.selectedTab = tab
         windowController.show()
         if windowShownAt == nil { windowShownAt = Date() }
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func showFloatingWindow() {
+        windowController?.window?.orderOut(nil)
+        viewMode = .floating
+        floatingController.show()
+    }
+
+    private func mainWindowDidHide() {
+        guard viewMode == .main else { return }
+        viewMode = .floating
+        floatingController.showIfNotCollapsed()
+    }
+
+    private func requestTermination() {
+        AppPanels.confirmQuit(model: model)
     }
 
     private func configureMainMenu() {
@@ -227,7 +329,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func quitFromMenu() {
-        AppPanels.confirmQuit(model: model)
+        requestTermination()
     }
 
     private func runUISmoke() async {
@@ -247,6 +349,85 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let statusVisible = statusBarController.isStatusItemVisible
         print("UI_SMOKE initiallyVisible=\(initiallyVisible) hiddenAfterClose=\(hiddenAfterClose) reopened=\(reopened) statusItemVisible=\(statusVisible)")
         NSApp.terminate(nil)
+    }
+
+    /// Exercises the real window-switching entry points and fails if any of
+    /// them invokes a manual refresh or opens a network request.
+    private func runSwitchSmoke() async {
+        try? await Task.sleep(nanoseconds: 900_000_000)
+        let refreshBaseline = model.refreshInvocationCount
+        let networkBaseline = model.networkRequestCount
+        var checks: [(String, Bool)] = []
+
+        showMainWindow(tab: .overview)
+        checks.append(("mainVisible", windowController.window?.isVisible == true))
+        checks.append(("floatingHiddenForMain", !floatingController.isVisible))
+
+        model.showMessageCenter = true
+        checks.append(("messageCenterOpen", model.showMessageCenter))
+        model.showMessageCenter = false
+
+        showFloatingWindow()
+        checks.append(("floatingVisible", floatingController.isVisible))
+        checks.append(("mainHidden", windowController.window?.isVisible == false))
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        let scrollStart = floatingController.setScrollOffsetForSmoke(CGPoint(x: 0, y: 140))
+        checks.append(("scrollPrepared", (scrollStart?.y ?? 0) > 0))
+        let summaryBuildBaseline = floatingController.summaryBuildCountForSmoke
+
+        showMainWindow(tab: .overview)
+        try? await Task.sleep(nanoseconds: 3_200_000_000)
+        let summaryBuildsWhileHidden = floatingController.summaryBuildCountForSmoke
+        checks.append(("noSummaryRebuildWhileHidden", summaryBuildsWhileHidden == summaryBuildBaseline))
+
+        showFloatingWindow()
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        let scrollAfterSwitch = floatingController.scrollOffsetForSmoke
+        checks.append(("scrollPreservedAcrossSwitch", scrollOffsetsMatch(scrollStart, scrollAfterSwitch)))
+        checks.append(("summaryRebuiltOnShow", floatingController.summaryBuildCountForSmoke > summaryBuildsWhileHidden))
+
+        floatingController.collapse()
+        checks.append(("collapsed", !floatingController.isVisible))
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        showFloatingWindow()
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        let scrollAfterCollapse = floatingController.scrollOffsetForSmoke
+        checks.append(("restoredFromCollapse", floatingController.isVisible))
+        checks.append(("scrollPreservedAcrossCollapse", scrollOffsetsMatch(scrollStart, scrollAfterCollapse)))
+
+        let initialDensity = floatingController.density
+        floatingController.toggleDensity()
+        checks.append(("densityChanged", floatingController.density != initialDensity))
+        floatingController.toggleDensity()
+        checks.append(("densityRestored", floatingController.density == initialDensity))
+
+        statusBarController.openMenuPanel()
+        try? await Task.sleep(nanoseconds: 400_000_000)
+        checks.append(("menuPanelOpen", statusBarController.isMenuPanelShown))
+        statusBarController.closeMenuPanel()
+
+        let refreshDelta = model.refreshInvocationCount - refreshBaseline
+        let networkDelta = model.networkRequestCount - networkBaseline
+        checks.append(("noRefreshInvocations", refreshDelta == 0))
+        checks.append(("noNetworkRequests", networkDelta == 0))
+
+        let failed = checks.filter { !$0.1 }.map(\.0)
+        let detail = checks.map { "\($0.0)=\($0.1)" }.joined(separator: " ")
+        let scrollDetail = "scrollStart=\(pointDescription(scrollStart)) scrollAfterSwitch=\(pointDescription(scrollAfterSwitch)) scrollAfterCollapse=\(pointDescription(scrollAfterCollapse)) summaryBuilds=\(summaryBuildBaseline)/\(summaryBuildsWhileHidden)/\(floatingController.summaryBuildCountForSmoke)"
+        print("SWITCH_SMOKE \(failed.isEmpty ? "PASS" : "FAIL") \(detail) \(scrollDetail) refreshInvocations=\(refreshDelta) networkRequests=\(networkDelta)")
+        fflush(stdout)
+        exit(failed.isEmpty ? 0 : 1)
+    }
+
+    private func scrollOffsetsMatch(_ lhs: CGPoint?, _ rhs: CGPoint?) -> Bool {
+        guard let lhs, let rhs else { return false }
+        return abs(lhs.x - rhs.x) <= 1 && abs(lhs.y - rhs.y) <= 1
+    }
+
+    private func pointDescription(_ point: CGPoint?) -> String {
+        guard let point else { return "nil" }
+        return String(format: "%.1f,%.1f", point.x, point.y)
     }
 
     private func runSnapshots() async {
@@ -327,10 +508,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @MainActor
 final class DashboardWindowController: NSWindowController, NSWindowDelegate {
     private let model: AppModel
+    private let onHide: (() -> Void)?
 
-    init(model: AppModel) {
+    init(
+        model: AppModel,
+        onSwitchToFloating: @escaping () -> Void,
+        onHide: (() -> Void)? = nil
+    ) {
         self.model = model
-        let hosting = NSHostingController(rootView: DashboardView(model: model))
+        self.onHide = onHide
+        let hosting = NSHostingController(
+            rootView: DashboardView(model: model, onSwitchToFloating: onSwitchToFloating)
+        )
         let window = NSWindow(contentViewController: hosting)
         window.title = "Overplay"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
@@ -362,6 +551,7 @@ final class DashboardWindowController: NSWindowController, NSWindowDelegate {
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         sender.orderOut(nil)
+        onHide?()
         return false
     }
 }

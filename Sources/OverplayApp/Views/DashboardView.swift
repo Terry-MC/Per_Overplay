@@ -3,6 +3,7 @@ import OverplayCore
 
 struct DashboardView: View {
     @ObservedObject var model: AppModel
+    var onSwitchToFloating: () -> Void = {}
 
     @State private var showAddAccount = false
     @State private var editAccount: Account?
@@ -74,6 +75,12 @@ struct DashboardView: View {
             }
             Spacer()
             if !model.showOnboarding || model.isDemo {
+                Button {
+                    onSwitchToFloating()
+                } label: {
+                    Label("简略版", systemImage: "rectangle.on.rectangle")
+                }
+                .help("切换到简略版悬浮窗")
                 Button {
                     model.showMessageCenter = true
                 } label: {

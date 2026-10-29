@@ -109,16 +109,19 @@ final class AppModel: ObservableObject {
     }
     @Published var balanceCurrencyFilter: String?
     @Published var showMessageCenter = false
+    @Published var hasUnsavedChanges = false
 
     var onStatusChanged: (() -> Void)?
 
     private let databaseURL: URL
     private let credentials: KeychainCredentialStore
     private let notifications = NotificationManager()
+    private let requestCounter: NetworkRequestCounter
     private var realStore: OverplayStore?
     private var demoStore: OverplayStore?
     private var syncEngine: SyncEngine?
-    private var transport: URLSessionTransport
+    private var transport: HTTPTransport
+    private(set) var refreshInvocationCount = 0
     private var timer: Timer?
     private var toastQueue = ToastQueue(maxVisible: 3)
     private var toastTasks: [String: Task<Void, Never>] = [:]
@@ -135,7 +138,12 @@ final class AppModel: ObservableObject {
             .appendingPathComponent("Library/Application Support/Overplay", isDirectory: true)
         self.databaseURL = directory.appendingPathComponent("overplay.sqlite")
         self.credentials = KeychainCredentialStore()
-        self.transport = URLSessionTransport()
+        let counter = NetworkRequestCounter()
+        self.requestCounter = counter
+        self.transport = RequestCountingTransport(
+            base: URLSessionTransport(),
+            counter: counter
+        )
 
         let defaults = UserDefaults.standard
         let persistedDemo = defaults.bool(forKey: Self.demoFlagKey)
@@ -170,6 +178,10 @@ final class AppModel: ObservableObject {
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
         updateMenuBar()
+    }
+
+    private func makeTransport() -> HTTPTransport {
+        RequestCountingTransport(base: URLSessionTransport(), counter: requestCounter)
     }
 
     func prepareForTermination() {
@@ -344,7 +356,12 @@ final class AppModel: ObservableObject {
 
     // MARK: - Refresh
 
+    var networkRequestCount: Int {
+        requestCounter.count
+    }
+
     func refresh(account: Account) {
+        refreshInvocationCount += 1
         guard !isDemo else {
             showBanner("演示模式使用固定演示数据，不发起网络请求", style: .info)
             return
@@ -360,6 +377,7 @@ final class AppModel: ObservableObject {
     }
 
     func refreshAll() {
+        refreshInvocationCount += 1
         guard !isDemo else {
             showBanner("演示模式使用固定演示数据，不发起网络请求", style: .info)
             return
@@ -1013,7 +1031,13 @@ final class AppModel: ObservableObject {
 
     var hasCriticalAlert: Bool {
         alerts.contains {
-            !$0.acknowledged && [.budgetExceeded, .credentialInvalid, .syncFailed, .dataStale].contains($0.kind)
+            !$0.acknowledged && [.budgetExceeded, .balanceLow, .credentialInvalid, .syncFailed].contains($0.kind)
+        }
+    }
+
+    var hasWarningAlert: Bool {
+        alerts.contains {
+            !$0.acknowledged && [.budgetWarning, .dataStale].contains($0.kind)
         }
     }
 
@@ -1211,7 +1235,7 @@ final class AppModel: ObservableObject {
             syncEngine?.onEvent = nil
             syncEngine = nil
             realStore = nil
-            transport = URLSessionTransport()
+            transport = makeTransport()
             syncingAccountIds.removeAll()
             demoStore = demo
             isDemo = true
@@ -1291,7 +1315,7 @@ final class AppModel: ObservableObject {
         resetToastState()
         syncingAccountIds.removeAll()
         settings = AppSettings()
-        transport = URLSessionTransport()
+        transport = makeTransport()
         _ = openRealStoreIfNeeded()
         syncEngine?.updateSettings(settings)
         reloadFromStore()
@@ -1469,13 +1493,14 @@ final class AppModel: ObservableObject {
     }
 
     var statusBarTooltip: String {
-        if isDemo { return "Overplay · 演示数据" }
-        if hasCriticalAlert {
-            return "Overplay · 有未确认告警（\(unacknowledgedAlerts.count)）"
+        var parts: [String] = [isDemo ? "Overplay · 演示数据" : "Overplay"]
+        if unacknowledgedAlertCount > 0 {
+            parts.append(hasCriticalAlert ? "有未确认警戒/失败 \(unacknowledgedAlertCount) 条" : "有未确认告警 \(unacknowledgedAlertCount) 条")
+        } else if hasWarningAlert {
+            parts.append("有未确认告知")
+        } else if !accounts.isEmpty {
+            parts.append("\(accounts.count) 个账户")
         }
-        if !accounts.isEmpty {
-            return "Overplay · \(accounts.count) 个账户"
-        }
-        return "Overplay"
+        return parts.joined(separator: " · ")
     }
 }

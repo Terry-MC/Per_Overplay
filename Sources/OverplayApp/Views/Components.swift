@@ -471,14 +471,17 @@ enum AppPanels {
     }
 
     static func confirmQuit(model: AppModel) {
+        guard model.hasUnsavedChanges else {
+            NSApp.terminate(nil)
+            return
+        }
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "退出 Overplay？"
-        alert.informativeText = "将停止定时刷新、取消进行中的请求并退出应用。已保存的数据不会丢失。"
+        alert.messageText = "有未保存的内容，仍要退出 Overplay？"
+        alert.informativeText = "退出将停止定时刷新、取消进行中的请求并关闭窗口。已保存的数据不会丢失；未保存的表单或设置将不会被保留。"
         alert.addButton(withTitle: "退出")
         alert.addButton(withTitle: "取消")
         if alert.runModal() == .alertFirstButtonReturn {
-            model.prepareForTermination()
             NSApp.terminate(nil)
         }
     }
