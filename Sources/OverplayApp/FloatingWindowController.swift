@@ -8,12 +8,25 @@ final class FloatingPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
+/// Drives whether the floating panel renders its content. While the panel is
+/// hidden or collapsed SwiftUI still receives model updates every 3 seconds,
+/// so the content subtree stays out of the hierarchy until it is visible again.
+@MainActor
+final class FloatingPanelVisibility: ObservableObject {
+    @Published var isVisible: Bool
+
+    init(isVisible: Bool) {
+        self.isVisible = isVisible
+    }
+}
+
 @MainActor
 final class FloatingWindowController: NSObject, NSWindowDelegate {
     private let model: AppModel
     private let panel: FloatingPanel
     private var hosting: NSHostingView<FloatingPanelView>!
     private let store: FloatingWindowStateStore
+    private let visibility: FloatingPanelVisibility
     private var state: FloatingWindowState
     private var isAdjustingFrame = false
     private let onClose: () -> Void
@@ -35,7 +48,9 @@ final class FloatingWindowController: NSObject, NSWindowDelegate {
         let screen = stored.flatMap { Self.bestScreen(for: $0.frame()) } ?? NSScreen.main
         let visibleFrame = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1280, height: 800)
         let loaded = stored ?? FloatingWindowState.initial(visibleFrame: visibleFrame)
-        self.state = loaded.clamped(to: visibleFrame)
+        let initialState = loaded.clamped(to: visibleFrame)
+        self.state = initialState
+        self.visibility = FloatingPanelVisibility(isVisible: !initialState.collapsed)
         self.panel = FloatingPanel(
             contentRect: state.frame(),
             styleMask: [.borderless, .nonactivatingPanel, .resizable],
@@ -73,12 +88,14 @@ final class FloatingWindowController: NSObject, NSWindowDelegate {
     /// collapsed state so a hidden panel is restored.
     func show() {
         state.collapsed = false
+        visibility.isVisible = true
         restoreToVisibleFrame()
         panel.orderFrontRegardless()
         persist()
     }
 
     func hideForMain() {
+        visibility.isVisible = false
         panel.orderOut(nil)
     }
 
@@ -88,6 +105,7 @@ final class FloatingWindowController: NSObject, NSWindowDelegate {
 
     func collapse() {
         state.collapsed = true
+        visibility.isVisible = false
         panel.orderOut(nil)
         persist()
     }
@@ -118,6 +136,7 @@ final class FloatingWindowController: NSObject, NSWindowDelegate {
         isAdjustingFrame = false
         hosting.rootView = makeRootView()
         persist()
+        visibility.isVisible = !state.collapsed
         if !state.collapsed {
             panel.orderFrontRegardless()
         }
@@ -149,6 +168,7 @@ final class FloatingWindowController: NSObject, NSWindowDelegate {
     private func makeRootView() -> FloatingPanelView {
         FloatingPanelView(
             model: model,
+            visibility: visibility,
             density: state.density,
             onClose: onClose,
             onToggleDensity: { [weak self] in self?.toggleDensity() },

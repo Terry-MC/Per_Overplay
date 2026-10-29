@@ -3,6 +3,7 @@ import OverplayCore
 
 struct FloatingPanelView: View {
     @ObservedObject var model: AppModel
+    @ObservedObject var visibility: FloatingPanelVisibility
     let density: FloatingDensity
     let onClose: () -> Void
     let onToggleDensity: () -> Void
@@ -22,16 +23,9 @@ struct FloatingPanelView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    globalSummary
-                    accountsSection
-                    footer
-                }
-                .padding(14)
+        Group {
+            if visibility.isVisible {
+                panelContent
             }
         }
         .background(
@@ -44,6 +38,21 @@ struct FloatingPanelView: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .preferredColorScheme(nil)
+    }
+
+    private var panelContent: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    globalSummary
+                    accountsSection
+                    footer
+                }
+                .padding(14)
+            }
+        }
     }
 
     private var header: some View {

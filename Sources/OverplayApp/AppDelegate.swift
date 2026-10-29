@@ -21,6 +21,9 @@ struct LaunchOptions {
     var showMessages = false
     var printStatusFrame = false
     var suppressToasts = false
+    var switchSmoke = false
+    var collapseFloating = false
+    var autoQuitAfter: Double?
 
     static func parse(_ arguments: [String]) -> LaunchOptions {
         var options = LaunchOptions()
@@ -71,6 +74,13 @@ struct LaunchOptions {
                 options.printStatusFrame = true
             case "--no-toasts":
                 options.suppressToasts = true
+            case "--switch-smoke":
+                options.switchSmoke = true
+            case "--collapse-floating":
+                options.collapseFloating = true
+            case "--auto-quit-after" where index + 1 < arguments.count:
+                index += 1
+                options.autoQuitAfter = Double(arguments[index])
             default:
                 break
             }
@@ -164,8 +174,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let isSnapshotMode = options.snapshotPath != nil || options.snapshotDirectory != nil
         let showMainAtLaunch = options.showWindow || isSnapshotMode || options.uiSmoke
-            || options.benchmark || model.showOnboarding
-        if showMainAtLaunch {
+            || options.switchSmoke || options.benchmark || model.showOnboarding
+        if options.collapseFloating {
+            viewMode = .floating
+            floatingController.collapse()
+        } else if showMainAtLaunch {
             showMainWindow(tab: options.tab)
         } else {
             viewMode = .floating
@@ -195,6 +208,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if options.uiSmoke {
             Task { await runUISmoke() }
+        }
+        if options.switchSmoke {
+            Task { await runSwitchSmoke() }
+        }
+        if let seconds = options.autoQuitAfter {
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+                NSApp.terminate(nil)
+            }
         }
         if options.showMenuPanel {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
@@ -328,6 +349,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let statusVisible = statusBarController.isStatusItemVisible
         print("UI_SMOKE initiallyVisible=\(initiallyVisible) hiddenAfterClose=\(hiddenAfterClose) reopened=\(reopened) statusItemVisible=\(statusVisible)")
         NSApp.terminate(nil)
+    }
+
+    /// Exercises the real window-switching entry points and fails if any of
+    /// them invokes a manual refresh or opens a network request.
+    private func runSwitchSmoke() async {
+        try? await Task.sleep(nanoseconds: 900_000_000)
+        let refreshBaseline = model.refreshInvocationCount
+        let networkBaseline = model.networkRequestCount
+        var checks: [(String, Bool)] = []
+
+        showMainWindow(tab: .overview)
+        checks.append(("mainVisible", windowController.window?.isVisible == true))
+        checks.append(("floatingHiddenForMain", !floatingController.isVisible))
+
+        model.showMessageCenter = true
+        checks.append(("messageCenterOpen", model.showMessageCenter))
+        model.showMessageCenter = false
+
+        showFloatingWindow()
+        checks.append(("floatingVisible", floatingController.isVisible))
+        checks.append(("mainHidden", windowController.window?.isVisible == false))
+
+        let initialDensity = floatingController.density
+        floatingController.toggleDensity()
+        checks.append(("densityChanged", floatingController.density != initialDensity))
+        floatingController.toggleDensity()
+        checks.append(("densityRestored", floatingController.density == initialDensity))
+
+        floatingController.collapse()
+        checks.append(("collapsed", !floatingController.isVisible))
+        showFloatingWindow()
+        checks.append(("restoredFromCollapse", floatingController.isVisible))
+
+        statusBarController.openMenuPanel()
+        try? await Task.sleep(nanoseconds: 400_000_000)
+        checks.append(("menuPanelOpen", statusBarController.isMenuPanelShown))
+        statusBarController.closeMenuPanel()
+
+        let refreshDelta = model.refreshInvocationCount - refreshBaseline
+        let networkDelta = model.networkRequestCount - networkBaseline
+        checks.append(("noRefreshInvocations", refreshDelta == 0))
+        checks.append(("noNetworkRequests", networkDelta == 0))
+
+        let failed = checks.filter { !$0.1 }.map(\.0)
+        let detail = checks.map { "\($0.0)=\($0.1)" }.joined(separator: " ")
+        print("SWITCH_SMOKE \(failed.isEmpty ? "PASS" : "FAIL") \(detail) refreshInvocations=\(refreshDelta) networkRequests=\(networkDelta)")
+        fflush(stdout)
+        exit(failed.isEmpty ? 0 : 1)
     }
 
     private func runSnapshots() async {
