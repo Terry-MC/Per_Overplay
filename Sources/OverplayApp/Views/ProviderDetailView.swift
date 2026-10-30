@@ -49,9 +49,6 @@ struct ProviderDetailView: View {
                         showsGranularity: true,
                         granularities: granularities
                     )
-                    if let error = model.analysisRangeError {
-                        InlineErrorView(message: error.message)
-                    }
                     if let issue = model.dataIssue(for: account) {
                         AnomalyNotice(message: issue)
                     }
@@ -64,6 +61,8 @@ struct ProviderDetailView: View {
         }
         .frame(minWidth: 820, minHeight: 640)
         .background(Color(nsColor: .windowBackgroundColor))
+        .onAppear { model.providerDetailVisible = true }
+        .onDisappear { model.providerDetailVisible = false }
     }
 
     private var header: some View {

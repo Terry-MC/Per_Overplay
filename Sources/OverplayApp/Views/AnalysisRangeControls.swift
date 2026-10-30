@@ -67,9 +67,12 @@ struct AnalysisRangeControls: View {
                     .datePickerStyle(.compact)
                 }
                 if let error = model.analysisRangeError {
-                    Label(error.message, systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
+                    Label(
+                        "\(error.message)；统计暂按近 30 天兜底显示，修正后自动恢复",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.orange)
                 }
             }
 

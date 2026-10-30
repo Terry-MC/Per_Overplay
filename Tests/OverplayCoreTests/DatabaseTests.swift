@@ -141,6 +141,92 @@ final class DatabaseTests: XCTestCase {
         XCTAssertEqual(try store.usage(accountId: second.id).count, 0)
     }
 
+    func testDeleteAccountDoesNotAffectOtherAccountDataOrCredentials() throws {
+        let keychain = InMemoryCredentialStore()
+        let now = TestClock.date()
+
+        let retained = try store.insertTestAccount(
+            provider: .deepseek,
+            name: "Retained",
+            threshold: BalanceThreshold(amount: 10, currency: "CNY")
+        )
+        let removed = try store.insertTestAccount(
+            provider: .openrouter,
+            name: "Removed",
+            budget: Budget(amount: 100, currency: "USD")
+        )
+        try keychain.setCredential("retained-key", accountId: retained.id)
+        try keychain.setCredential("removed-key", accountId: removed.id)
+        try store.upsertUsage([
+            UsageRecord(
+                accountId: retained.id, accountName: retained.displayName, provider: .deepseek,
+                day: "2026-10-27", model: "retained-model", promptTokens: 10,
+                source: "test", updatedAt: now
+            ),
+            UsageRecord(
+                accountId: removed.id, accountName: removed.displayName, provider: .openrouter,
+                day: "2026-10-27", model: "removed-model", cost: 5, currency: "USD",
+                source: "test", updatedAt: now
+            )
+        ], accountName: "seed")
+        try store.insertBalanceSnapshots([
+            BalanceSnapshot(
+                accountId: retained.id, currency: "CNY", total: 42,
+                asOf: now.addingTimeInterval(-60), source: "test"
+            )
+        ])
+        try store.insertQuotaSnapshot(QuotaSnapshot(
+            id: "quota-retained", accountId: retained.id, totalCredits: 100,
+            totalUsage: 10, remaining: 90, currency: "CNY",
+            asOf: now.addingTimeInterval(-60), source: "test"
+        ))
+        try store.insertQuotaSnapshot(QuotaSnapshot(
+            id: "quota-removed", accountId: removed.id, totalCredits: 100,
+            totalUsage: 10, remaining: 90, currency: "USD",
+            asOf: now.addingTimeInterval(-60), source: "test"
+        ))
+
+        try keychain.deleteCredential(accountId: removed.id)
+        try store.deleteAccount(id: removed.id, removeHistory: false)
+
+        XCTAssertNil(try store.account(id: removed.id))
+        XCTAssertEqual(try store.usage(accountId: removed.id).count, 1, "默认保留被删账户历史")
+        XCTAssertEqual(try store.usage(accountId: retained.id).count, 1)
+        XCTAssertEqual(try store.latestQuota(accountId: retained.id)?.remaining, 90)
+        XCTAssertEqual(
+            try store.balanceSnapshots(accountId: retained.id, currency: "CNY").first?.total,
+            42
+        )
+        XCTAssertEqual(try store.account(id: retained.id)?.balanceThreshold?.amount, 10)
+        XCTAssertEqual(try keychain.credential(accountId: removed.id), nil)
+        XCTAssertEqual(try keychain.credential(accountId: retained.id), "retained-key")
+
+        let secondRetained = try store.insertTestAccount(provider: .deepseek, name: "Keep")
+        let secondRemoved = try store.insertTestAccount(provider: .openrouter, name: "Drop")
+        try keychain.setCredential("keep-key", accountId: secondRetained.id)
+        try keychain.setCredential("drop-key", accountId: secondRemoved.id)
+        try store.upsertUsage([
+            UsageRecord(
+                accountId: secondRetained.id, accountName: secondRetained.displayName,
+                provider: .deepseek, day: "2026-10-27", model: "keep", source: "test", updatedAt: now
+            ),
+            UsageRecord(
+                accountId: secondRemoved.id, accountName: secondRemoved.displayName,
+                provider: .openrouter, day: "2026-10-27", model: "drop",
+                cost: 1, currency: "USD", source: "test", updatedAt: now
+            )
+        ], accountName: "seed2")
+
+        try keychain.deleteCredential(accountId: secondRemoved.id)
+        try store.deleteAccount(id: secondRemoved.id, removeHistory: true)
+
+        XCTAssertEqual(try store.usage(accountId: secondRemoved.id).count, 0)
+        XCTAssertEqual(try store.usage(accountId: secondRetained.id).count, 1)
+        XCTAssertNotNil(try store.account(id: secondRetained.id))
+        XCTAssertEqual(try keychain.credential(accountId: secondRetained.id), "keep-key")
+        XCTAssertNil(try keychain.credential(accountId: secondRemoved.id))
+    }
+
     func testSnapshotsAndAlertStatePersistence() throws {
         let account = try store.insertTestAccount(provider: .deepseek)
         try store.insertBalanceSnapshots([

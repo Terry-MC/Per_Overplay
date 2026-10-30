@@ -75,6 +75,26 @@ final class AnalysisRangeTests: XCTestCase {
         }
     }
 
+    func testCustomRetentionBoundaryUsesCalendarAcrossDST() throws {
+        let newYork = TimeZone(identifier: "America/New_York")!
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = newYork
+        let now = calendar.date(from: DateComponents(
+            year: 2026, month: 3, day: 8, hour: 12, minute: 0
+        ))!
+        let start = calendar.date(byAdding: .day, value: -365, to: now)!
+        XCTAssertNoThrow(
+            try AnalysisRange.make(
+                preset: .custom,
+                customStart: start,
+                customEnd: now,
+                now: now,
+                timeZone: newYork,
+                calendar: calendar
+            )
+        )
+    }
+
     func testGranularitySupportFollowsProviderCapabilities() {
         XCTAssertTrue(
             AnalysisGranularitySupport.available(for: .deepseek, isDemo: false).contains(.minute)
@@ -207,5 +227,36 @@ final class AnalysisRangeTests: XCTestCase {
         XCTAssertEqual(hourly.count, 2)
         XCTAssertEqual(hourly[0].value, 90)
         XCTAssertEqual(hourly[1].value, 80)
+    }
+
+    func testBalanceGranularityKeepsLastSnapshotPerCurrencyInSameBucket() {
+        let snapshots = [
+            BalanceSnapshot(
+                id: "cny-1", accountId: "ds", currency: "CNY", total: 100,
+                asOf: TestClock.date(2026, 10, 28, 10, 5), source: "test"
+            ),
+            BalanceSnapshot(
+                id: "usd-1", accountId: "ds", currency: "USD", total: 50,
+                asOf: TestClock.date(2026, 10, 28, 10, 10), source: "test"
+            ),
+            BalanceSnapshot(
+                id: "cny-2", accountId: "ds", currency: "CNY", total: 90,
+                asOf: TestClock.date(2026, 10, 28, 10, 45), source: "test"
+            ),
+            BalanceSnapshot(
+                id: "usd-2", accountId: "ds", currency: "USD", total: 40,
+                asOf: TestClock.date(2026, 10, 28, 10, 50), source: "test"
+            )
+        ]
+
+        let hourly = AnalysisChartMath.balancePoints(
+            snapshots: snapshots,
+            granularity: .hour,
+            timeZone: TestClock.utc,
+            calendar: TestClock.calendar
+        )
+        XCTAssertEqual(hourly.count, 2)
+        XCTAssertEqual(hourly.filter { $0.currency == "CNY" }.first?.value, 90)
+        XCTAssertEqual(hourly.filter { $0.currency == "USD" }.first?.value, 40)
     }
 }

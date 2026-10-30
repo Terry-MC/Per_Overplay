@@ -25,17 +25,7 @@ struct BaseInfoView: View {
                 }
             }
 
-            AnalysisRangeControls(
-                model: model,
-                showsGranularity: true,
-                granularities: [.automatic, .day, .month, .year]
-            )
-
-            if let error = model.analysisRangeError {
-                InlineErrorView(
-                    message: "\(error.message)；以下统计暂按近 30 天兜底显示，修正范围后自动恢复。"
-                )
-            }
+            AnalysisRangeControls(model: model)
 
             if model.analysisAccounts.contains(where: { $0.provider == .openrouter }),
                CalendarDay.days(from: model.currentRange).count > 30 {

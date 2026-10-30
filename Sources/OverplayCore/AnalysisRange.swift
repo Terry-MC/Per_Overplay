@@ -592,7 +592,8 @@ public enum AnalysisChartMath {
         }
         var buckets: [String: BalanceSnapshot] = [:]
         for snapshot in snapshots {
-            let key = bucketKey(date: snapshot.asOf, granularity: granularity, calendar: calendar)
+            let timeKey = bucketKey(date: snapshot.asOf, granularity: granularity, calendar: calendar)
+            let key = "\(snapshot.currency)|\(timeKey)"
             if let existing = buckets[key], existing.asOf >= snapshot.asOf { continue }
             buckets[key] = snapshot
         }

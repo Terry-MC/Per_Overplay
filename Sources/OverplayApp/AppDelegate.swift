@@ -435,12 +435,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         checks.append(("tabBaseInfoSelected", model.selectedTab == .overview))
         if let firstAccount = model.accounts.first {
             model.selectedProviderDetailAccountId = firstAccount.id
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            checks.append((
-                "providerDetailOpened",
-                model.selectedProviderDetailAccountId == firstAccount.id
-            ))
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            checks.append(("providerDetailOpened", model.providerDetailVisible))
             model.selectedProviderDetailAccountId = nil
+            try? await Task.sleep(nanoseconds: 500_000_000)
         }
         showFloatingWindow()
 

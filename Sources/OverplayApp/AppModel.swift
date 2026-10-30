@@ -112,6 +112,7 @@ final class AppModel: ObservableObject {
     }
     @Published var balanceCurrencyFilter: String?
     @Published var selectedProviderDetailAccountId: String?
+    @Published var providerDetailVisible = false
     @Published var debugDeleteAccountId: String?
     @Published var showMessageCenter = false
     @Published var hasUnsavedChanges = false
@@ -258,7 +259,8 @@ final class AppModel: ObservableObject {
             var newBalances: [String: [String: BalanceSnapshot]] = [:]
             var newHistory: [String: [String: [BalanceSnapshot]]] = [:]
             var newQuotas: [String: QuotaSnapshot] = [:]
-            let retentionStart = now.addingTimeInterval(-365 * 86_400)
+            let retentionStart = Calendar.current.date(byAdding: .day, value: -365, to: now)
+                ?? now.addingTimeInterval(-365 * 86_400)
             let historyRange = (try? AnalysisRange.make(
                 preset: .custom,
                 customStart: retentionStart,
