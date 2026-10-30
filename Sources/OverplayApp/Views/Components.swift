@@ -166,6 +166,7 @@ func providerStyle(for provider: ProviderKind) -> ProviderStyle {
     switch provider {
     case .deepseek: return ProviderStyle(abbreviation: "D", color: .blue)
     case .openrouter: return ProviderStyle(abbreviation: "O", color: .purple)
+    case .genericHTTP: return ProviderStyle(abbreviation: "HTTP", color: .gray)
     case .kimi: return ProviderStyle(abbreviation: "K", color: .teal)
     case .glm: return ProviderStyle(abbreviation: "G", color: .cyan)
     case .minimax: return ProviderStyle(abbreviation: "MM", color: .orange)
@@ -181,20 +182,142 @@ func providerStyle(for provider: ProviderKind) -> ProviderStyle {
     }
 }
 
+enum AccountIconCatalog {
+    static let options = [
+        "server.rack", "cloud", "creditcard", "chart.bar.xaxis",
+        "network", "building.2", "bolt.horizontal.circle"
+    ]
+
+    static func normalized(_ name: String?) -> String? {
+        guard let name = name?.trimmingCharacters(in: .whitespacesAndNewlines),
+              options.contains(name) else { return nil }
+        return name
+    }
+}
+
+enum BrandIconCatalog {
+    private static let fileNames: [ProviderKind: String] = [
+        .deepseek: "brand-deepseek",
+        .openrouter: "brand-openrouter",
+        .kimi: "brand-kimi",
+        .glm: "brand-glm",
+        .minimax: "brand-minimax",
+        .qwen: "brand-qwen",
+        .seed: "brand-seed",
+        .hunyuan: "brand-hunyuan",
+        .openai: "brand-openai",
+        .anthropic: "brand-anthropic",
+        .gemini: "brand-gemini",
+        .meta: "brand-meta",
+        .xai: "brand-xai",
+        .mistral: "brand-mistral"
+    ]
+
+    private static let images: [ProviderKind: NSImage] = {
+        var result: [ProviderKind: NSImage] = [:]
+        for (provider, name) in fileNames {
+            guard let url = Bundle.module.url(forResource: name, withExtension: "png"),
+                  let image = NSImage(contentsOf: url) else { continue }
+            result[provider] = image
+        }
+        return result
+    }()
+
+    static func image(for provider: ProviderKind) -> NSImage? {
+        images[provider]
+    }
+}
+
 struct ProviderMark: View {
     var provider: ProviderKind
+    var iconName: String?
+
+    init(provider: ProviderKind, iconName: String? = nil) {
+        self.provider = provider
+        self.iconName = iconName
+    }
 
     var body: some View {
         let style = providerStyle(for: provider)
+        let customIcon = AccountIconCatalog.normalized(iconName)
+        let brandIcon = customIcon == nil ? BrandIconCatalog.image(for: provider) : nil
         RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .fill(style.color.opacity(0.16))
+            .fill(brandIcon == nil ? style.color.opacity(0.16) : Color.white.opacity(0.96))
             .frame(width: 34, height: 34)
-            .overlay(
-                Text(style.abbreviation)
-                    .font(style.abbreviation.count > 1 ? .caption.weight(.bold) : .headline.weight(.bold))
-                    .foregroundStyle(style.color)
-            )
+            .overlay {
+                if let customIcon {
+                    Image(systemName: customIcon)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(style.color)
+                } else if let brandIcon {
+                    Image(nsImage: brandIcon)
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                        .frame(width: 21, height: 21)
+                } else {
+                    Text(style.abbreviation)
+                        .font(style.abbreviation.count > 1 ? .caption.weight(.bold) : .headline.weight(.bold))
+                        .foregroundStyle(style.color)
+                }
+            }
+            .overlay {
+                if brandIcon != nil {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .stroke(Color.black.opacity(0.10), lineWidth: 1)
+                }
+            }
             .accessibilityLabel(provider.displayName)
+    }
+}
+
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+    var lineSpacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var rowWidth: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var totalHeight: CGFloat = 0
+        var widestRow: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if rowWidth > 0, rowWidth + spacing + size.width > maxWidth {
+                widestRow = max(widestRow, rowWidth)
+                totalHeight += rowHeight + lineSpacing
+                rowWidth = size.width
+                rowHeight = size.height
+            } else {
+                rowWidth += (rowWidth > 0 ? spacing : 0) + size.width
+                rowHeight = max(rowHeight, size.height)
+            }
+        }
+        widestRow = max(widestRow, rowWidth)
+        totalHeight += rowHeight
+        let width = maxWidth.isFinite ? min(widestRow, maxWidth) : widestRow
+        return CGSize(width: width, height: totalHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + lineSpacing
+                rowHeight = 0
+            }
+            subview.place(
+                at: CGPoint(x: x, y: y),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: size.width, height: size.height)
+            )
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
     }
 }
 
@@ -471,19 +594,24 @@ enum AppPanels {
     }
 
     static func confirmQuit(model: AppModel) {
-        guard model.hasUnsavedChanges else {
-            NSApp.terminate(nil)
-            return
-        }
+        _ = model
+        NSApp.terminate(nil)
+    }
+
+    static func confirmDiscardUnsaved(model: AppModel, action: String) -> Bool {
+        guard model.hasUnsavedChanges else { return true }
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "有未保存的内容，仍要退出 Overplay？"
-        alert.informativeText = "退出将停止定时刷新、取消进行中的请求并关闭窗口。已保存的数据不会丢失；未保存的表单或设置将不会被保留。"
-        alert.addButton(withTitle: "退出")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = "有未保存的新增厂商表单，仍要\(action)？"
+        alert.informativeText = "继续将丢弃表单内容；已保存的账户和设置不会受影响。"
+        alert.addButton(withTitle: "放弃修改")
+        alert.addButton(withTitle: "返回")
         if alert.runModal() == .alertFirstButtonReturn {
-            NSApp.terminate(nil)
+            model.hasUnsavedChanges = false
+            model.providerFormResetToken = UUID()
+            return true
         }
+        return false
     }
 
     static func errorAlert(title: String, message: String) {
@@ -533,9 +661,9 @@ struct AlertRowView: View {
 
     private var color: Color {
         switch alert.kind {
-        case .budgetExceeded, .credentialInvalid, .syncFailed:
+        case .budgetExceeded, .credentialInvalid, .syncFailed, .lineCritical:
             return .red
-        case .budgetWarning, .balanceLow:
+        case .budgetWarning, .balanceLow, .lineWarning:
             return .orange
         case .dataStale:
             return .yellow
@@ -544,8 +672,8 @@ struct AlertRowView: View {
 
     private var symbol: String {
         switch alert.kind {
-        case .budgetWarning: return "chart.pie.fill"
-        case .budgetExceeded: return "exclamationmark.octagon.fill"
+        case .budgetWarning, .lineWarning: return "chart.pie.fill"
+        case .budgetExceeded, .lineCritical: return "exclamationmark.octagon.fill"
         case .balanceLow: return "creditcard.trianglebadge.exclamationmark"
         case .syncFailed: return "arrow.triangle.2.circlepath.circle.fill"
         case .credentialInvalid: return "key.slash.fill"

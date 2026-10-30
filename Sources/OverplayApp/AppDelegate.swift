@@ -12,6 +12,7 @@ struct LaunchOptions {
     var dataDirectory: URL?
     var overviewPlatform: ProviderKind?
     var overviewAccount: String?
+    var windowWidth: CGFloat?
     var windowHeight: CGFloat?
     var darkAppearance = false
     var uiSmoke = false
@@ -26,6 +27,7 @@ struct LaunchOptions {
     var detailAccountId: String?
     var deleteSheetAccountId: String?
     var demoErrorAccountId: String?
+    var alertLineAccountId: String?
     var autoQuitAfter: Double?
 
     static func parse(_ arguments: [String]) -> LaunchOptions {
@@ -56,6 +58,11 @@ struct LaunchOptions {
             case "--overview-account" where index + 1 < arguments.count:
                 index += 1
                 options.overviewAccount = arguments[index]
+            case "--window-width" where index + 1 < arguments.count:
+                index += 1
+                if let width = Double(arguments[index]) {
+                    options.windowWidth = CGFloat(width)
+                }
             case "--window-height" where index + 1 < arguments.count:
                 index += 1
                 if let height = Double(arguments[index]) {
@@ -90,6 +97,9 @@ struct LaunchOptions {
             case "--demo-error-account" where index + 1 < arguments.count:
                 index += 1
                 options.demoErrorAccountId = arguments[index]
+            case "--alert-line-account" where index + 1 < arguments.count:
+                index += 1
+                options.alertLineAccountId = arguments[index]
             case "--auto-quit-after" where index + 1 < arguments.count:
                 index += 1
                 options.autoQuitAfter = Double(arguments[index])
@@ -196,10 +206,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             viewMode = .floating
             floatingController.showIfNotCollapsed()
         }
-        if let height = options.windowHeight {
-            windowController.setContentSize(width: 1280, height: height)
-        } else if isSnapshotMode {
-            windowController.setContentSize(width: 1280, height: 800)
+        if options.windowWidth != nil || options.windowHeight != nil || isSnapshotMode {
+            windowController.setContentSize(
+                width: options.windowWidth ?? 1280,
+                height: options.windowHeight ?? 800
+            )
         }
         if let demoErrorAccountId = options.demoErrorAccountId {
             model.injectDemoRefreshFailure(accountId: demoErrorAccountId)
@@ -211,6 +222,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let deleteSheetAccountId = options.deleteSheetAccountId {
             showMainWindow(tab: .overview)
             model.debugDeleteAccountId = deleteSheetAccountId
+        }
+        if let alertLineAccountId = options.alertLineAccountId {
+            showMainWindow(tab: .addProvider)
+            model.debugAlertLineAccountId = alertLineAccountId
         }
 
         if options.showMessages {
@@ -279,6 +294,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let model else { return .terminateNow }
+        guard !model.hasUnsavedChanges
+            || AppPanels.confirmDiscardUnsaved(model: model, action: "退出") else {
+            return .terminateCancel
+        }
+        return .terminateNow
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         shutdownSequence?.runIfNeeded()
     }
@@ -293,6 +317,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showFloatingWindow() {
+        guard !model.hasUnsavedChanges
+            || AppPanels.confirmDiscardUnsaved(model: model, action: "切换到简略版") else {
+            return
+        }
         windowController?.window?.orderOut(nil)
         viewMode = .floating
         floatingController.show()
@@ -431,11 +459,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         checks.append(("tabQuotaSelected", model.selectedTab == .quota))
         model.selectedTab = .settings
         checks.append(("tabSettingsSelected", model.selectedTab == .settings))
+        model.selectedTab = .addProvider
+        checks.append(("tabAddProviderSelected", model.selectedTab == .addProvider))
         model.selectedTab = .overview
         checks.append(("tabBaseInfoSelected", model.selectedTab == .overview))
+        try? await Task.sleep(nanoseconds: 500_000_000)
         if let firstAccount = model.accounts.first {
             model.selectedProviderDetailAccountId = firstAccount.id
-            try? await Task.sleep(nanoseconds: 400_000_000)
+            for _ in 0..<20 {
+                if model.providerDetailVisible { break }
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            }
             checks.append(("providerDetailOpened", model.providerDetailVisible))
             model.selectedProviderDetailAccountId = nil
             try? await Task.sleep(nanoseconds: 500_000_000)
@@ -491,7 +525,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             capture(to: URL(fileURLWithPath: path))
         }
-        NSApp.terminate(nil)
+        exit(0)
     }
 
     private func scrollMainScrollViewToBottom() {
@@ -530,9 +564,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func capture(to url: URL) {
-        guard let window = windowController.window,
-              let view = window.contentView else { return }
-        window.displayIfNeeded()
+        guard let window = windowController.window else { return }
+        let targetWindow = window.attachedSheet ?? window
+        guard let view = targetWindow.contentView else { return }
+        targetWindow.displayIfNeeded()
         view.layoutSubtreeIfNeeded()
         guard let representation = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
         view.cacheDisplay(in: view.bounds, to: representation)
@@ -590,6 +625,10 @@ final class DashboardWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard !model.hasUnsavedChanges
+            || AppPanels.confirmDiscardUnsaved(model: model, action: "关闭主窗口") else {
+            return false
+        }
         sender.orderOut(nil)
         onHide?()
         return false

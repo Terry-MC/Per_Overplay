@@ -41,7 +41,8 @@ public enum DemoData {
             lastSuccessAt: now.addingTimeInterval(-120),
             lastAttemptAt: now.addingTimeInterval(-120),
             balanceThreshold: BalanceThreshold(amount: 100, currency: "CNY"),
-            isDemo: true
+            isDemo: true,
+            officialName: "DeepSeek 官方余额演示"
         )
         let demoDeepSeekUSD = Account(
             id: "demo-deepseek-usd",
@@ -63,7 +64,8 @@ public enum DemoData {
             lastSuccessAt: now.addingTimeInterval(-300),
             lastAttemptAt: now.addingTimeInterval(-300),
             budget: Budget(amount: 100, currency: "USD"),
-            isDemo: true
+            isDemo: true,
+            officialName: "OpenRouter activity 演示组织"
         )
         try store.insertAccount(demoDeepSeek)
         try store.insertAccount(demoDeepSeekUSD)

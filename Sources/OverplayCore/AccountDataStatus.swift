@@ -17,7 +17,7 @@ public enum AccountDataStatus {
                 ? .failed("同步失败：\(error)")
                 : .partial("同步失败：\(error)")
         }
-        guard account.provider.capabilities.balance else {
+        guard account.capabilities.balance else {
             return .unavailable("\(account.provider.displayName) 不提供官方余额")
         }
         guard !balances.isEmpty else {
@@ -50,7 +50,7 @@ public enum AccountDataStatus {
                 ? .failed("同步失败：\(error)")
                 : .partial("同步失败：\(error)")
         }
-        guard account.provider.capabilities.credits else {
+        guard account.capabilities.credits else {
             return .unavailable("\(account.provider.displayName) 不提供官方额度")
         }
         guard quota != nil else {
@@ -111,7 +111,7 @@ public enum AccountDataStatus {
                 ? .failed("同步失败：\(error)")
                 : .partial("同步失败：\(error)")
         }
-        guard account.provider.capabilities.usage else {
+        guard account.capabilities.usage else {
             return .unavailable("\(account.provider.displayName) 不提供历史用量")
         }
         guard account.lastSuccessAt != nil else {

@@ -20,6 +20,8 @@ struct AccountEditorView: View {
 
     @State private var provider: ProviderKind
     @State private var name: String
+    @State private var officialName: String
+    @State private var iconName: String
     @State private var apiKey = ""
     @State private var isTesting = false
     @State private var testResult: ConnectionTestResult?
@@ -33,9 +35,13 @@ struct AccountEditorView: View {
         case .add:
             _provider = State(initialValue: .deepseek)
             _name = State(initialValue: "")
+            _officialName = State(initialValue: "")
+            _iconName = State(initialValue: "")
         case .edit(let account):
             _provider = State(initialValue: account.provider)
             _name = State(initialValue: account.name)
+            _officialName = State(initialValue: account.officialName ?? "")
+            _iconName = State(initialValue: account.iconName ?? "")
         }
     }
 
@@ -87,6 +93,26 @@ struct AccountEditorView: View {
                         Text("留空时使用厂商名称。多个账户可使用不同名称区分。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                    }
+
+                    HStack(alignment: .top, spacing: 14) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("官方名称（可选）").font(.headline)
+                            TextField("例如：OpenRouter 生产组织", text: $officialName)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 300)
+                        }
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("图标").font(.headline)
+                            Picker("图标", selection: $iconName) {
+                                Text("默认（厂商图标）").tag("")
+                                ForEach(AccountIconCatalog.options, id: \.self) { icon in
+                                    Label(icon, systemImage: icon).tag(icon)
+                                }
+                            }
+                            .labelsHidden()
+                            .frame(width: 180)
+                        }
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
@@ -254,9 +280,21 @@ struct AccountEditorView: View {
         do {
             if let account = editingAccount {
                 let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-                try model.updateAccount(account, name: name, newAPIKey: key.isEmpty ? nil : key)
+                try model.updateAccount(
+                    account,
+                    name: name,
+                    newAPIKey: key.isEmpty ? nil : key,
+                    officialName: officialName,
+                    iconName: iconName
+                )
             } else {
-                _ = try model.saveNewAccount(provider: provider, name: name, apiKey: apiKey)
+                _ = try model.saveNewAccount(
+                    provider: provider,
+                    name: name,
+                    apiKey: apiKey,
+                    officialName: officialName,
+                    iconName: iconName
+                )
             }
             dismiss()
         } catch {

@@ -97,7 +97,7 @@ public enum DashboardMetrics {
         quotas: [String: QuotaSnapshot]
     ) -> [String: Decimal] {
         var result: [String: Decimal] = [:]
-        for account in accounts where account.enabled && account.provider.capabilities.credits {
+        for account in accounts where account.enabled && account.capabilities.credits {
             guard let quota = quotas[account.id],
                   AccountDataStatus.quota(account: account, quota: quota).isActual else { continue }
             result[quota.currency, default: 0] += quota.remaining
@@ -111,7 +111,7 @@ public enum DashboardMetrics {
         balances: [String: [String: BalanceSnapshot]]
     ) -> [String] {
         var result = Set<String>()
-        for account in accounts where account.enabled && account.provider.capabilities.balance {
+        for account in accounts where account.enabled && account.capabilities.balance {
             let snapshots = balances[account.id] ?? [:]
             guard !snapshots.isEmpty else { continue }
             let ordered = snapshots.values.sorted { $0.currency < $1.currency }
@@ -128,7 +128,7 @@ public enum DashboardMetrics {
         currency: String
     ) -> Decimal? {
         var total: Decimal?
-        for account in accounts where account.enabled && account.provider.capabilities.balance {
+        for account in accounts where account.enabled && account.capabilities.balance {
             let snapshots = balances[account.id] ?? [:]
             let ordered = snapshots.values.sorted { $0.currency < $1.currency }
             guard AccountDataStatus.balance(account: account, balances: ordered).isActual,

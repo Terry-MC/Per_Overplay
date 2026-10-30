@@ -315,6 +315,16 @@ public final class OverplayStore {
         } else if version < Self.schemaVersion {
             throw DatabaseError("缺少数据库迁移步骤：\(version) -> \(Self.schemaVersion)")
         }
+        try connection.execute("""
+        CREATE TABLE IF NOT EXISTS account_profiles (
+            account_id TEXT PRIMARY KEY,
+            official_name TEXT,
+            icon_name TEXT,
+            generic_config TEXT,
+            alert_config TEXT,
+            FOREIGN KEY(account_id) REFERENCES accounts(id) ON DELETE CASCADE
+        )
+        """)
     }
 
     public func clearAllData() throws {
@@ -323,7 +333,7 @@ public final class OverplayStore {
                 for table in [
                     "alert_states", "alert_events", "sync_runs", "quota_snapshots",
                     "balance_snapshots", "usage_records", "budgets", "balance_thresholds",
-                    "accounts", "settings"
+                    "account_profiles", "accounts", "settings"
                 ] {
                     try connection.execute("DELETE FROM \(table)")
                 }
@@ -342,11 +352,13 @@ public final class OverplayStore {
             )
             let budgets = try loadBudgets()
             let thresholds = try loadThresholds()
+            let profiles = try loadAccountProfiles()
             return rows.compactMap { row in
                 guard let account = account(from: row) else { return nil }
                 var copy = account
                 copy.budget = budgets[account.id]
                 copy.balanceThreshold = thresholds[account.id]
+                apply(profile: profiles[account.id], to: &copy)
                 return copy
             }
         }
@@ -360,7 +372,128 @@ public final class OverplayStore {
             guard let row = rows.first, var account = account(from: row) else { return nil }
             account.budget = try loadBudget(accountId: id)
             account.balanceThreshold = try loadThreshold(accountId: id)
+            apply(profile: try accountProfile(accountId: id), to: &account)
             return account
+        }
+    }
+
+    public struct AccountProfile: Equatable, Sendable {
+        public var officialName: String?
+        public var iconName: String?
+        public var genericConfig: GenericHTTPConfig?
+        public var alertConfig: AccountAlertConfig?
+
+        public init(
+            officialName: String? = nil,
+            iconName: String? = nil,
+            genericConfig: GenericHTTPConfig? = nil,
+            alertConfig: AccountAlertConfig? = nil
+        ) {
+            self.officialName = officialName
+            self.iconName = iconName
+            self.genericConfig = genericConfig
+            self.alertConfig = alertConfig
+        }
+
+        public var isEmpty: Bool {
+            officialName == nil && iconName == nil && genericConfig == nil && alertConfig == nil
+        }
+    }
+
+    public func accountProfile(accountId: String) throws -> AccountProfile? {
+        try withLock {
+            let rows = try connection.query(
+                "SELECT * FROM account_profiles WHERE account_id = ? LIMIT 1", [accountId]
+            )
+            return rows.first.flatMap(profile(from:))
+        }
+    }
+
+    public func saveAccountProfile(accountId: String, profile: AccountProfile) throws {
+        try withLock {
+            try saveAccountProfileLocked(accountId: accountId, profile: profile)
+        }
+    }
+
+    private func loadAccountProfiles() throws -> [String: AccountProfile] {
+        let rows = try connection.query("SELECT * FROM account_profiles")
+        var result: [String: AccountProfile] = [:]
+        for row in rows {
+            guard let accountId = row["account_id"] as? String,
+                  let profile = profile(from: row) else { continue }
+            result[accountId] = profile
+        }
+        return result
+    }
+
+    private func profile(from row: [String: Any]) -> AccountProfile? {
+        guard let accountId = row["account_id"] as? String, !accountId.isEmpty else { return nil }
+        let decoder = JSONDecoder()
+        let generic = (row["generic_config"] as? String)
+            .flatMap { $0.data(using: .utf8) }
+            .flatMap { try? decoder.decode(GenericHTTPConfig.self, from: $0) }
+        let alert = (row["alert_config"] as? String)
+            .flatMap { $0.data(using: .utf8) }
+            .flatMap { try? decoder.decode(AccountAlertConfig.self, from: $0) }
+        return AccountProfile(
+            officialName: row["official_name"] as? String,
+            iconName: row["icon_name"] as? String,
+            genericConfig: generic,
+            alertConfig: alert
+        )
+    }
+
+    private func apply(profile: AccountProfile?, to account: inout Account) {
+        guard let profile else { return }
+        account.officialName = profile.officialName
+        account.iconName = profile.iconName
+        account.genericConfig = profile.genericConfig
+        account.alertConfig = profile.alertConfig
+    }
+
+    private func saveAccountProfileLocked(accountId: String, account: Account) throws {
+        try saveAccountProfileLocked(accountId: accountId, profile: AccountProfile(
+            officialName: account.officialName,
+            iconName: account.iconName,
+            genericConfig: account.genericConfig,
+            alertConfig: account.alertConfig
+        ))
+    }
+
+    private func saveAccountProfileLocked(accountId: String, profile: AccountProfile) throws {
+        if profile.isEmpty {
+            try connection.execute("DELETE FROM account_profiles WHERE account_id = ?", [accountId])
+            return
+        }
+        let encoder = JSONEncoder()
+        let generic = profile.genericConfig
+            .flatMap { try? encoder.encode($0) }
+            .flatMap { String(data: $0, encoding: .utf8) }
+        let alert = profile.alertConfig
+            .flatMap { try? encoder.encode($0) }
+            .flatMap { String(data: $0, encoding: .utf8) }
+        try connection.execute("""
+        INSERT INTO account_profiles (
+            account_id, official_name, icon_name, generic_config, alert_config
+        ) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(account_id) DO UPDATE SET
+            official_name = excluded.official_name,
+            icon_name = excluded.icon_name,
+            generic_config = excluded.generic_config,
+            alert_config = excluded.alert_config
+        """, [accountId, profile.officialName, profile.iconName, generic, alert])
+    }
+
+    public func updateAccountProfile(
+        id: String,
+        name: String,
+        profile: AccountProfile
+    ) throws {
+        try withLock {
+            try connection.transaction {
+                try connection.execute("UPDATE accounts SET name = ? WHERE id = ?", [name, id])
+                try saveAccountProfileLocked(accountId: id, profile: profile)
+            }
         }
     }
 
@@ -385,6 +518,7 @@ public final class OverplayStore {
             if let threshold = account.balanceThreshold {
                 try setBalanceThresholdLocked(accountId: account.id, threshold: threshold)
             }
+            try saveAccountProfileLocked(accountId: account.id, account: account)
         }
     }
 
@@ -452,6 +586,7 @@ public final class OverplayStore {
                     try connection.execute("DELETE FROM alert_states WHERE key LIKE ?", ["%\(id)%"])
                     try connection.execute("DELETE FROM budgets WHERE account_id = ?", [id])
                     try connection.execute("DELETE FROM balance_thresholds WHERE account_id = ?", [id])
+                    try connection.execute("DELETE FROM account_profiles WHERE account_id = ?", [id])
                     try connection.execute("DELETE FROM accounts WHERE id = ?", [id])
                 } else {
                     try connection.execute(
@@ -460,6 +595,7 @@ public final class OverplayStore {
                     )
                     try connection.execute("DELETE FROM budgets WHERE account_id = ?", [id])
                     try connection.execute("DELETE FROM balance_thresholds WHERE account_id = ?", [id])
+                    try connection.execute("DELETE FROM account_profiles WHERE account_id = ?", [id])
                     try connection.execute("DELETE FROM alert_states WHERE key LIKE ?", ["%\(id)%"])
                 }
             }
@@ -888,6 +1024,12 @@ public final class OverplayStore {
         }
     }
 
+    public func deleteAlertStates(like pattern: String) throws {
+        try withLock {
+            try connection.execute("DELETE FROM alert_states WHERE key LIKE ?", [pattern])
+        }
+    }
+
     public func alertState(key: String) throws -> AlertState? {
         try withLock {
             let rows = try connection.query("SELECT * FROM alert_states WHERE key = ?", [key])
@@ -946,9 +1088,14 @@ public final class OverplayStore {
             }
             let interval = Int(values["refresh_interval_minutes"] ?? "") ?? 15
             let notifications = (values["notifications_enabled"] ?? "1") != "0"
+            let publicAlertConfig = (values["public_alert_config"] ?? "")
+                .data(using: .utf8)
+                .flatMap { try? JSONDecoder().decode(PublicAlertConfig.self, from: $0) }
+                ?? PublicAlertConfig()
             return AppSettings(
                 refreshIntervalMinutes: max(5, min(60, interval)),
-                notificationsEnabled: notifications
+                notificationsEnabled: notifications,
+                publicAlertConfig: publicAlertConfig
             )
         }
     }
@@ -958,6 +1105,8 @@ public final class OverplayStore {
             try connection.transaction {
                 try setSettingLocked("refresh_interval_minutes", String(settings.refreshIntervalMinutes))
                 try setSettingLocked("notifications_enabled", settings.notificationsEnabled ? "1" : "0")
+                let publicConfig = try JSONEncoder().encode(settings.publicAlertConfig)
+                try setSettingLocked("public_alert_config", String(data: publicConfig, encoding: .utf8) ?? "{}")
             }
         }
     }

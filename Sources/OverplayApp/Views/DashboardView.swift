@@ -82,6 +82,10 @@ struct DashboardView: View {
             Spacer()
             if !model.showOnboarding || model.isDemo {
                 Button {
+                    guard !model.hasUnsavedChanges
+                        || AppPanels.confirmDiscardUnsaved(model: model, action: "切换到简略版") else {
+                        return
+                    }
                     onSwitchToFloating()
                 } label: {
                     Label("简略版", systemImage: "rectangle.on.rectangle")
@@ -120,7 +124,7 @@ struct DashboardView: View {
                 .disabled(model.isDemo || model.accounts.isEmpty)
                 if !model.isDemo {
                     Button {
-                        showAddAccount = true
+                        model.selectedTab = .addProvider
                     } label: {
                         Label("添加账户", systemImage: "plus")
                     }
@@ -151,6 +155,12 @@ struct DashboardView: View {
         HStack(spacing: 4) {
             ForEach(DashboardTab.allCases) { tab in
                 Button {
+                    if model.selectedTab == .addProvider,
+                       model.hasUnsavedChanges,
+                       tab != .addProvider,
+                       !AppPanels.confirmDiscardUnsaved(model: model, action: "切换页签") {
+                        return
+                    }
                     model.selectedTab = tab
                 } label: {
                     HStack(spacing: 6) {
@@ -194,10 +204,16 @@ struct DashboardView: View {
             UsageView(model: model)
         case .quota:
             QuotaView(model: model)
+        case .addProvider:
+            AddProviderView(
+                model: model,
+                onEdit: { editAccount = $0 },
+                onDelete: { deleteAccount = $0 }
+            )
         case .settings:
             SettingsView(
                 model: model,
-                onAddAccount: { showAddAccount = true },
+                onAddAccount: { model.selectedTab = .addProvider },
                 onEditAccount: { editAccount = $0 },
                 onDeleteAccount: { deleteAccount = $0 }
             )

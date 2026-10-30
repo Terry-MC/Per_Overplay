@@ -8,6 +8,7 @@ enum DashboardTab: String, CaseIterable, Identifiable {
     case overview
     case usage
     case quota
+    case addProvider
     case settings
 
     var id: String { rawValue }
@@ -17,6 +18,7 @@ enum DashboardTab: String, CaseIterable, Identifiable {
         case .overview: return "基础信息"
         case .usage: return "用量分析"
         case .quota: return "额度与预算"
+        case .addProvider: return "新增厂商"
         case .settings: return "设置"
         }
     }
@@ -26,6 +28,7 @@ enum DashboardTab: String, CaseIterable, Identifiable {
         case .overview: return "square.grid.2x2"
         case .usage: return "chart.bar.xaxis"
         case .quota: return "gauge.with.dots.needle.50percent"
+        case .addProvider: return "plus.rectangle.on.rectangle"
         case .settings: return "gearshape"
         }
     }
@@ -57,6 +60,7 @@ enum AppActionError: LocalizedError {
     case emptyKey
     case invalidAmount
     case currencyMismatch(String)
+    case duplicateAccount
     case storage(String)
 
     var errorDescription: String? {
@@ -67,8 +71,17 @@ enum AppActionError: LocalizedError {
         case .invalidAmount: return "请输入大于 0 的金额"
         case .currencyMismatch(let currencies):
             return "该账户的余额币种为 \(currencies)，请选择对应币种"
+        case .duplicateAccount:
+            return "同厂商下已存在同名账户，请使用不同显示名称"
         case .storage(let message): return message
         }
+    }
+}
+
+private extension String {
+    var nilIfBlank: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 
@@ -113,7 +126,9 @@ final class AppModel: ObservableObject {
     @Published var balanceCurrencyFilter: String?
     @Published var selectedProviderDetailAccountId: String?
     @Published var providerDetailVisible = false
+    @Published var providerFormResetToken = UUID()
     @Published var debugDeleteAccountId: String?
+    @Published var debugAlertLineAccountId: String?
     @Published var showMessageCenter = false
     @Published var hasUnsavedChanges = false
 
@@ -436,15 +451,33 @@ final class AppModel: ObservableObject {
 
     // MARK: - Account management
 
-    func saveNewAccount(provider: ProviderKind, name: String, apiKey: String) throws -> Account {
+    func saveNewAccount(
+        provider: ProviderKind,
+        name: String,
+        apiKey: String,
+        officialName: String? = nil,
+        iconName: String? = nil,
+        genericConfig: GenericHTTPConfig? = nil,
+        alertConfig: AccountAlertConfig? = nil
+    ) throws -> Account {
         guard !isDemo else { throw AppActionError.demoReadOnly }
         guard let realStore else { throw AppActionError.storage("本地数据库不可用") }
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedKey.isEmpty else { throw AppActionError.emptyKey }
+        let resolvedName = try AccountInputValidator.validateNewAccount(
+            provider: provider,
+            name: name,
+            credential: trimmedKey,
+            genericConfig: genericConfig,
+            existingAccounts: accounts
+        )
         let account = Account(
             provider: provider,
-            name: trimmedName.isEmpty ? provider.displayName : trimmedName
+            name: resolvedName,
+            isDemo: false,
+            officialName: officialName?.nilIfBlank,
+            iconName: AccountIconCatalog.normalized(iconName),
+            genericConfig: genericConfig,
+            alertConfig: alertConfig ?? .off
         )
         try credentials.setCredential(trimmedKey, accountId: account.id)
         do {
@@ -458,16 +491,40 @@ final class AppModel: ObservableObject {
         if let refreshed = accounts.first(where: { $0.id == account.id }) {
             refresh(account: refreshed)
         }
-        showBanner("已添加 \(account.displayName)，正在测试连接与能力", style: .success)
+        showBanner("已添加 \(account.displayName)，开始监控", style: .success)
         return account
     }
 
-    func updateAccount(_ account: Account, name: String, newAPIKey: String?) throws {
+    func updateAccount(
+        _ account: Account,
+        name: String,
+        newAPIKey: String?,
+        officialName: String? = nil,
+        iconName: String? = nil,
+        genericConfig: GenericHTTPConfig? = nil,
+        alertConfig: AccountAlertConfig? = nil
+    ) throws {
         guard !isDemo else { throw AppActionError.demoReadOnly }
         guard let realStore else { throw AppActionError.storage("本地数据库不可用") }
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = trimmedName.isEmpty ? account.provider.displayName : trimmedName
-        try realStore.updateProfile(id: account.id, name: resolvedName)
+        if accounts.contains(where: {
+            $0.id != account.id && $0.provider == account.provider
+                && $0.displayName.caseInsensitiveCompare(resolvedName) == .orderedSame
+        }) {
+            throw AppActionError.duplicateAccount
+        }
+        let resolvedGeneric = genericConfig ?? account.genericConfig
+        if account.provider == .genericHTTP, let resolvedGeneric {
+            _ = try resolvedGeneric.requestURL()
+        }
+        let profile = OverplayStore.AccountProfile(
+            officialName: officialName.map { $0.nilIfBlank } ?? account.officialName,
+            iconName: iconName.map { AccountIconCatalog.normalized($0) } ?? account.iconName,
+            genericConfig: resolvedGeneric,
+            alertConfig: alertConfig ?? account.alertConfig
+        )
+        try realStore.updateAccountProfile(id: account.id, name: resolvedName, profile: profile)
         let trimmedKey = newAPIKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !trimmedKey.isEmpty {
             try credentials.setCredential(trimmedKey, accountId: account.id)
@@ -481,6 +538,51 @@ final class AppModel: ObservableObject {
             }
         }
         showBanner("账户信息已更新", style: .success)
+    }
+
+    func savePublicAlertConfig(_ config: PublicAlertConfig) {
+        guard !isDemo else { return }
+        var updated = settings
+        updated.publicAlertConfig = config
+        guard let store = activeStore else { return }
+        do {
+            try store.saveSettings(updated)
+            settings = updated
+            syncEngine?.updateSettings(updated)
+            for account in accounts {
+                guard let config = account.alertConfig else { continue }
+                for (severity, rule) in [("warning", config.warning), ("critical", config.critical)]
+                where rule.mode == .followPublic && rule.metric.usesPercent {
+                    try? store.deleteAlertStates(
+                        like: "line:\(account.id):\(severity):\(rule.metric.rawValue):%"
+                    )
+                }
+            }
+            evaluateAndReloadAlerts()
+            showBanner("公共告知 / 警戒线已保存", style: .success)
+        } catch {
+            showBanner("保存公共告警线失败：\(error.localizedDescription)", style: .error)
+        }
+    }
+
+    func saveAccountAlertConfig(_ account: Account, config: AccountAlertConfig) {
+        guard !isDemo else {
+            showBanner("演示模式不可修改告警线", style: .info)
+            return
+        }
+        guard let store = activeStore else { return }
+        do {
+            var profile = try store.accountProfile(accountId: account.id)
+                ?? OverplayStore.AccountProfile()
+            profile.alertConfig = config
+            try store.saveAccountProfile(accountId: account.id, profile: profile)
+            try? store.deleteAlertStates(like: "line:\(account.id):%")
+            reloadFromStore()
+            evaluateAndReloadAlerts()
+            showBanner("告警线配置已保存", style: .success)
+        } catch {
+            showBanner("保存告警线失败：\(error.localizedDescription)", style: .error)
+        }
     }
 
     func setAccountEnabled(_ account: Account, enabled: Bool) {
@@ -527,14 +629,22 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func testConnection(provider: ProviderKind, apiKey: String) async -> ConnectionTestResult {
+    func testConnection(
+        provider: ProviderKind,
+        apiKey: String,
+        genericConfig: GenericHTTPConfig? = nil
+    ) async -> ConnectionTestResult {
         cancelConnectionTest()
         connectionTestToken += 1
         let token = connectionTestToken
         let credential = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let transport = URLSessionTransport()
         let task = Task {
-            let connector = ConnectorFactory.make(for: provider, transport: transport)
+            let connector = ConnectorFactory.make(
+                for: provider,
+                transport: transport,
+                genericConfig: genericConfig
+            )
             let result = await connector.testConnection(credential: credential, now: Date())
             transport.shutdown()
             return result
@@ -736,7 +846,7 @@ final class AppModel: ObservableObject {
     }
 
     var overviewUsageRecords: [UsageRecord] {
-        let scoped = overviewAccountsToShow.filter { $0.provider.capabilities.usage }
+        let scoped = overviewAccountsToShow.filter { $0.capabilities.usage }
         return DashboardMetrics.usageRecords(usageRecords, for: scoped)
     }
 
@@ -850,7 +960,7 @@ final class AppModel: ObservableObject {
     }
 
     var officialCreditsRemaining: [String: Decimal] {
-        let scoped = overviewAccountsToShow.filter { $0.provider.capabilities.credits }
+        let scoped = overviewAccountsToShow.filter { $0.capabilities.credits }
         return DashboardMetrics.creditsRemaining(accounts: scoped, quotas: quotas)
     }
 
@@ -872,7 +982,7 @@ final class AppModel: ObservableObject {
     }
 
     var availableBalanceCurrencies: [String] {
-        let scoped = overviewAccountsToShow.filter { $0.provider.capabilities.balance }
+        let scoped = overviewAccountsToShow.filter { $0.capabilities.balance }
         return DashboardMetrics.balanceCurrencies(accounts: scoped, balances: balances)
     }
 
@@ -882,7 +992,7 @@ final class AppModel: ObservableObject {
 
     var officialBalances: [String: Decimal] {
         guard let balanceCurrencyFilter else { return [:] }
-        let scoped = overviewAccountsToShow.filter { $0.provider.capabilities.balance }
+        let scoped = overviewAccountsToShow.filter { $0.capabilities.balance }
         guard let total = DashboardMetrics.balanceTotal(
             accounts: scoped,
             balances: balances,
@@ -896,7 +1006,7 @@ final class AppModel: ObservableObject {
     }
 
     func currencyLabel(for account: Account) -> String {
-        if account.provider.capabilities.balance {
+        if account.capabilities.balance {
             let currencies = balanceCurrencies(for: account)
             if currencies.isEmpty {
                 return account.lastSuccessAt == nil ? "币种待同步" : "币种未知"
@@ -907,11 +1017,11 @@ final class AppModel: ObservableObject {
     }
 
     var usageAccounts: [Account] {
-        accounts.filter { $0.provider.capabilities.usage }
+        accounts.filter { $0.capabilities.usage }
     }
 
     var creditAccounts: [Account] {
-        accounts.filter { $0.provider.capabilities.credits }
+        accounts.filter { $0.capabilities.credits }
     }
 
     var activeDeepSeekAccounts: [Account] {
@@ -956,14 +1066,14 @@ final class AppModel: ObservableObject {
     }
 
     private var scopedUsageAccounts: [Account] {
-        overviewAccountsToShow.filter { $0.provider.capabilities.usage }
+        overviewAccountsToShow.filter { $0.capabilities.usage }
     }
 
     private func overviewUsageDataStatus() -> DataStatus {
-        if let selectedOverviewAccount, !selectedOverviewAccount.provider.capabilities.usage {
+        if let selectedOverviewAccount, !selectedOverviewAccount.capabilities.usage {
             return .unavailable("所选账户为 \(selectedOverviewAccount.provider.displayName)，不提供历史费用 / 用量")
         }
-        if let platform = overviewPlatformFilter, !platform.capabilities.usage {
+        if let platform = overviewPlatformFilter, platform != .genericHTTP, !platform.capabilities.usage {
             return .unavailable("\(platform.displayName) 平台不提供历史费用 / 用量")
         }
         return usageRecordsStatus(
@@ -994,15 +1104,15 @@ final class AppModel: ObservableObject {
 
     func creditDataStatus() -> DataStatus {
         if let selectedOverviewAccount {
-            guard selectedOverviewAccount.provider.capabilities.credits else {
+            guard selectedOverviewAccount.capabilities.credits else {
                 return .unavailable("所选账户为 \(selectedOverviewAccount.provider.displayName)，不提供官方额度")
             }
             return creditDataStatus(for: selectedOverviewAccount)
         }
-        if let platform = overviewPlatformFilter, !platform.capabilities.credits {
+        if let platform = overviewPlatformFilter, platform != .genericHTTP, !platform.capabilities.credits {
             return .unavailable("\(platform.displayName) 平台不提供官方额度")
         }
-        let scoped = overviewAccountsToShow.filter { $0.provider.capabilities.credits }
+        let scoped = overviewAccountsToShow.filter { $0.capabilities.credits }
         guard !scoped.isEmpty else {
             return .missing("所选范围没有提供官方额度的账户")
         }
@@ -1023,10 +1133,10 @@ final class AppModel: ObservableObject {
                 balances: latestBalances(for: account)
             )
         }
-        if let platform = overviewPlatformFilter, !platform.capabilities.balance {
+        if let platform = overviewPlatformFilter, platform != .genericHTTP, !platform.capabilities.balance {
             return .unavailable("\(platform.displayName) 平台不提供官方余额")
         }
-        let scoped = overviewAccountsToShow.filter { $0.provider.capabilities.balance }
+        let scoped = overviewAccountsToShow.filter { $0.capabilities.balance }
         guard !scoped.isEmpty else {
             return .missing("所选范围没有提供官方余额的账户")
         }
@@ -1103,10 +1213,10 @@ final class AppModel: ObservableObject {
         if let lastSuccess = account.lastSuccessAt {
             if now.timeIntervalSince(lastSuccess) > settings.refreshInterval * 2 { return .stale }
             if account.lastError != nil { return .partial }
-            if account.provider.capabilities.balance, latestBalances(for: account).isEmpty {
+            if account.capabilities.balance, latestBalances(for: account).isEmpty {
                 return .connectedNoData
             }
-            if account.provider.capabilities.credits, latestQuota(for: account) == nil {
+            if account.capabilities.credits, latestQuota(for: account) == nil {
                 return .connectedNoData
             }
             return .healthy
@@ -1134,7 +1244,7 @@ final class AppModel: ObservableObject {
             if account.lastError != nil { return "能力未验证（同步失败）" }
             return "等待连接测试"
         }
-        let capabilities = account.provider.capabilities
+        let capabilities = account.capabilities
         if account.lastError != nil {
             if capabilities.credits {
                 return latestQuota(for: account) == nil
@@ -1183,13 +1293,13 @@ final class AppModel: ObservableObject {
 
     var hasCriticalAlert: Bool {
         alerts.contains {
-            !$0.acknowledged && [.budgetExceeded, .balanceLow, .credentialInvalid, .syncFailed].contains($0.kind)
+            !$0.acknowledged && [.budgetExceeded, .balanceLow, .credentialInvalid, .syncFailed, .lineCritical].contains($0.kind)
         }
     }
 
     var hasWarningAlert: Bool {
         alerts.contains {
-            !$0.acknowledged && [.budgetWarning, .dataStale].contains($0.kind)
+            !$0.acknowledged && [.budgetWarning, .dataStale, .lineWarning].contains($0.kind)
         }
     }
 

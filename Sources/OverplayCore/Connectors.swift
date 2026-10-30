@@ -7,10 +7,25 @@ public protocol ProviderConnector {
 }
 
 public enum ConnectorFactory {
-    public static func make(for provider: ProviderKind, transport: HTTPTransport) -> ProviderConnector {
+    public static func make(for account: Account, transport: HTTPTransport) -> ProviderConnector {
+        make(
+            for: account.provider,
+            transport: transport,
+            genericConfig: account.genericConfig
+        )
+    }
+
+    public static func make(
+        for provider: ProviderKind,
+        transport: HTTPTransport,
+        genericConfig: GenericHTTPConfig? = nil
+    ) -> ProviderConnector {
         switch provider {
         case .deepseek: return DeepSeekConnector(transport: transport)
         case .openrouter: return OpenRouterConnector(transport: transport)
+        case .genericHTTP:
+            guard let genericConfig else { return UnsupportedConnector(provider: provider) }
+            return GenericHTTPConnector(config: genericConfig, transport: transport)
         default: return UnsupportedConnector(provider: provider)
         }
     }

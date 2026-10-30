@@ -20,7 +20,7 @@ struct DeleteAccountSheet: View {
 
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 10) {
-                    ProviderMark(provider: account.provider)
+                    ProviderMark(provider: account.provider, iconName: account.iconName)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(account.displayName).font(.headline)
                         Text(account.provider.displayName).font(.caption).foregroundStyle(.secondary)

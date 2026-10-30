@@ -227,6 +227,46 @@ final class DatabaseTests: XCTestCase {
         XCTAssertNil(try keychain.credential(accountId: secondRemoved.id))
     }
 
+    func testAccountProfileAndPublicAlertConfigRoundTrip() throws {
+        let generic = GenericHTTPConfig(
+            baseURL: "https://api.example.com",
+            endpointPath: "/summary",
+            authMode: .header,
+            headerName: "X-API-Key",
+            mapping: GenericFieldMapping(
+                balanceTotal: "data.balance.total",
+                balanceCurrency: "data.balance.currency"
+            )
+        )
+        let alert = AccountAlertConfig(
+            warning: AlertLineRule(mode: .followPublic, metric: .quotaPercent),
+            critical: AlertLineRule(mode: .custom, metric: .tokenAbsolute, value: 1_000)
+        )
+        let account = Account(
+            provider: .genericHTTP,
+            name: "Custom",
+            officialName: "Example API",
+            iconName: "cloud",
+            genericConfig: generic,
+            alertConfig: alert
+        )
+        try store.insertAccount(account)
+
+        let loaded = try XCTUnwrap(try store.account(id: account.id))
+        XCTAssertEqual(loaded.officialName, "Example API")
+        XCTAssertEqual(loaded.iconName, "cloud")
+        XCTAssertEqual(loaded.genericConfig, generic)
+        XCTAssertEqual(loaded.alertConfig, alert)
+
+        var settings = try store.settings()
+        settings.publicAlertConfig = PublicAlertConfig(warningPercent: 70, criticalPercent: 90)
+        try store.saveSettings(settings)
+        XCTAssertEqual(
+            try store.settings().publicAlertConfig,
+            PublicAlertConfig(warningPercent: 70, criticalPercent: 90)
+        )
+    }
+
     func testSnapshotsAndAlertStatePersistence() throws {
         let account = try store.insertTestAccount(provider: .deepseek)
         try store.insertBalanceSnapshots([

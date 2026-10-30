@@ -16,6 +16,7 @@ let package = Package(
         .executableTarget(
             name: "OverplayApp",
             dependencies: ["OverplayCore"],
+            resources: [.process("Resources")],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("SwiftUI"),

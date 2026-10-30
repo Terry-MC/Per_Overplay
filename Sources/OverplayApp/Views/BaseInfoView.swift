@@ -170,20 +170,24 @@ struct BaseInfoView: View {
         let presentProviders = ProviderKind.allCases.filter { provider in
             model.accounts.contains { $0.provider == provider }
         }
-        return HStack(spacing: 10) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    platformButton(nil, title: "All", symbol: "square.grid.2x2")
-                    ForEach(presentProviders) { provider in
-                        platformButton(for: provider)
-                    }
+        return VStack(alignment: .leading, spacing: 6) {
+            FlowLayout(spacing: 6, lineSpacing: 6) {
+                platformButton(nil, title: "All", symbol: "square.grid.2x2")
+                ForEach(presentProviders) { provider in
+                    platformButton(for: provider)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Text(model.overviewPlatformFilter.map { "仅显示 \($0.displayName)" } ?? "全部 AI 平台")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize()
+            HStack(spacing: 8) {
+                Text(model.overviewPlatformFilter.map { "仅显示 \($0.displayName)" } ?? "全部 AI 平台")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if presentProviders.count > 3 {
+                    Label("窗口较窄时平台标签自动换行", systemImage: "arrow.turn.down.left")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
         }
         .padding(6)
         .background(
@@ -202,12 +206,10 @@ struct BaseInfoView: View {
     }
 
     private func accountFilterChips(platform: ProviderKind) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                accountChip(nil, title: "全部 \(platform.displayName) 账户")
-                ForEach(model.overviewPlatformAccounts) { account in
-                    accountChip(account.id, title: account.displayName)
-                }
+        FlowLayout(spacing: 6, lineSpacing: 6) {
+            accountChip(nil, title: "全部 \(platform.displayName) 账户")
+            ForEach(model.overviewPlatformAccounts) { account in
+                accountChip(account.id, title: account.displayName)
             }
         }
     }
@@ -243,7 +245,16 @@ struct BaseInfoView: View {
             model.overviewPlatformFilter = platform
         } label: {
             HStack(spacing: 6) {
-                if let symbol {
+                if let platform, let brandIcon = BrandIconCatalog.image(for: platform) {
+                    Image(nsImage: brandIcon)
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                        .frame(width: 16, height: 16)
+                        .padding(3)
+                        .background(Circle().fill(Color.white.opacity(0.94)))
+                        .overlay(Circle().stroke(Color.black.opacity(0.08), lineWidth: 0.5))
+                } else if let symbol {
                     Image(systemName: symbol)
                         .font(.caption)
                 } else if let letter {
@@ -314,7 +325,7 @@ private struct ProviderOverviewCard: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: 10) {
-            ProviderMark(provider: account.provider)
+            ProviderMark(provider: account.provider, iconName: account.iconName)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(account.displayName)
@@ -329,6 +340,7 @@ private struct ProviderOverviewCard: View {
                     .lineLimit(2)
             }
             Spacer(minLength: 6)
+            accountAlertBadge
             HealthBadge(health: health)
             Button {
                 model.refresh(account: account)
@@ -368,10 +380,34 @@ private struct ProviderOverviewCard: View {
     private var subtitle: String {
         [
             account.provider.displayName,
+            account.officialName.map { "官方 \($0)" },
             model.currencyLabel(for: account),
             account.capabilities.summary
-        ].joined(separator: " · ")
+        ].compactMap { $0 }.joined(separator: " · ")
     }
+
+    @ViewBuilder
+    private var accountAlertBadge: some View {
+        let unacknowledged = model.alerts.filter {
+            $0.accountId == account.id && !$0.acknowledged
+        }
+        let critical = unacknowledged.contains {
+            [.budgetExceeded, .balanceLow, .credentialInvalid, .syncFailed, .lineCritical].contains($0.kind)
+        }
+        let warning = unacknowledged.contains {
+            [.budgetWarning, .dataStale, .lineWarning].contains($0.kind)
+        }
+        if critical {
+            Label("警戒", systemImage: "exclamationmark.octagon.fill")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.red)
+        } else if warning {
+            Label("告知", systemImage: "exclamationmark.circle.fill")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.orange)
+        }
+    }
+
 
     private var refreshHelp: String {
         if let reason = model.refreshBlockedReason(for: account) { return reason }
@@ -504,7 +540,7 @@ private struct ProviderOverviewCard: View {
                     }
                     ProgressView(value: min(max(NSDecimalNumber(decimal: percent).doubleValue / 100, 0), 1))
                         .tint(.blue)
-                    Text("中性使用率；告警线由 issue-005 配置，未启用时不显示告知 / 警戒标记。")
+                    Text("中性使用率；告警线在“新增厂商”页按账户配置，未启用时不显示告知 / 警戒标记。")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
@@ -516,19 +552,55 @@ private struct ProviderOverviewCard: View {
     private var progressSection: some View {
         if forceUnavailable {
             EmptyView()
-        } else if let budget = account.budget, let ratio = model.budgetRatio(for: account) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("本地预算使用率（本机自然月）").font(.caption2).foregroundStyle(.secondary)
-                    Spacer()
-                    Text(Money.percent(ratio)).font(.caption.weight(.semibold))
+        } else {
+            if let budget = account.budget, let ratio = model.budgetRatio(for: account) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("本地预算使用率（本机自然月）").font(.caption2).foregroundStyle(.secondary)
+                        Spacer()
+                        Text(Money.percent(ratio)).font(.caption.weight(.semibold))
+                    }
+                    ProgressView(value: min(max(NSDecimalNumber(decimal: ratio).doubleValue / 100, 0), 1))
+                        .tint(.blue)
+                    Text("预算 \(Money.formatBalance(budget.amount, currency: budget.currency)) · 与官方额度分开。")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                 }
-                ProgressView(value: min(max(NSDecimalNumber(decimal: ratio).doubleValue / 100, 0), 1))
-                    .tint(.blue)
-                Text("预算 \(Money.formatBalance(budget.amount, currency: budget.currency)) · 与官方额度分开；告警配置由 issue-005 交付。")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
             }
+            alertRuleSummary
+        }
+    }
+
+    @ViewBuilder
+    private var alertRuleSummary: some View {
+        if account.alertConfig == nil {
+            if account.budget != nil || account.balanceThreshold != nil {
+                Text("旧阈值兼容：预算 80% / 100%\(account.balanceThreshold.map { " · 余额 \(Money.formatBalance($0.amount, currency: $0.currency))" } ?? "")；新告警线默认关闭。")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            let rules = (account.alertConfig ?? .off).resolved(public: model.settings.publicAlertConfig)
+            if !rules.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(rules.enumerated()), id: \.offset) { _, rule in
+                        Text("\(rule.severity == .warning ? "告知线" : "警戒线")：\(rule.metric.label) \(thresholdText(rule)) · \(rule.source)")
+                            .font(.caption2)
+                            .foregroundStyle(rule.severity == .warning ? .orange : .red)
+                    }
+                }
+            }
+        }
+    }
+
+    private func thresholdText(_ rule: ResolvedAlertRule) -> String {
+        switch rule.metric {
+        case .budgetPercent, .quotaPercent:
+            return Money.percent(rule.threshold)
+        case .balanceAbsolute:
+            return "≤ \(Money.formatBalance(rule.threshold, currency: rule.currency ?? account.provider.defaultCurrency))"
+        case .tokenAbsolute:
+            return "≥ \(Money.formatCompactInteger(NSDecimalNumber(decimal: rule.threshold).intValue)) tokens"
         }
     }
 
@@ -556,6 +628,9 @@ private struct ProviderOverviewCard: View {
         }
         if account.provider == .openrouter {
             return "来源：OpenRouter activity · 约 30 天 UTC 日桶"
+        }
+        if account.provider == .genericHTTP {
+            return "来源：通用 HTTP · 仅映射字段"
         }
         if account.isDemo || model.isDemo {
             return "来源：演示数据 · 不联网"

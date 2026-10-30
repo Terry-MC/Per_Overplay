@@ -115,15 +115,22 @@ struct SettingsView: View {
                 } else {
                     ForEach(model.accounts) { account in
                         HStack(spacing: 10) {
-                            ProviderMark(provider: account.provider)
+                            ProviderMark(provider: account.provider, iconName: account.iconName)
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 6) {
                                     Text(account.displayName).font(.subheadline.weight(.semibold))
                                     if model.isDemo || account.isDemo { DemoTag() }
                                 }
-                                Text(account.provider.displayName + " · " + model.currencyLabel(for: account) + " · " + model.capabilitySummary(for: account))
-                                    .font(.caption)
-                                    .foregroundStyle(account.credentialInvalid ? .red : .secondary)
+                                Text(
+                                    [
+                                        account.provider.displayName,
+                                        account.officialName.map { "官方 \($0)" },
+                                        model.currencyLabel(for: account),
+                                        model.capabilitySummary(for: account)
+                                    ].compactMap { $0 }.joined(separator: " · ")
+                                )
+                                .font(.caption)
+                                .foregroundStyle(account.credentialInvalid ? .red : .secondary)
                                 Text(model.lastSyncText(for: account))
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
@@ -195,7 +202,7 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 10) {
                 row("本地数据位置", model.dataFileDisplayPath, monospaced: true)
                 row("凭证存储", "macOS Keychain（仅本机，不随 iCloud 同步）")
-                row("网络访问", "仅 DeepSeek / OpenRouter 官方 HTTPS 域名；无遥测、无第三方统计")
+                row("网络访问", "DeepSeek / OpenRouter 官方 HTTPS 域名，以及用户明确配置的通用 HTTPS 端点；无遥测、无第三方统计")
                 row("DeepSeek 限制", "仅余额；无历史 token / 费用接口，界面显示“厂商未提供”")
                 row("OpenRouter 限制", "需要 Management Key；activity 约 30 个 UTC 日窗口")
                 Divider()

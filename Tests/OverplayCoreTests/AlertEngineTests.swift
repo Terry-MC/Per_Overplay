@@ -25,7 +25,14 @@ final class AlertEngineTests: XCTestCase {
         createdAt: Date? = nil,
         usageFresh: Bool = true,
         enabled: Bool = true,
-        at date: Date? = nil
+        at date: Date? = nil,
+        alertConfig: AccountAlertConfig? = nil,
+        publicConfig: PublicAlertConfig = PublicAlertConfig(),
+        quota: QuotaSnapshot? = nil,
+        quotaFresh: Bool = false,
+        balances: [BalanceSnapshot] = [],
+        monthTokens: Int? = nil,
+        tokenFresh: Bool = false
     ) -> AlertSnapshot {
         AlertSnapshot(
             accountId: accountId,
@@ -44,7 +51,14 @@ final class AlertEngineTests: XCTestCase {
             createdAt: createdAt ?? (date ?? now).addingTimeInterval(-86_400),
             refreshInterval: 15 * 60,
             usageIsFresh: usageFresh,
-            now: date ?? now
+            now: date ?? now,
+            alertConfig: alertConfig,
+            publicAlertConfig: publicConfig,
+            latestQuota: quota,
+            quotaIsFresh: quotaFresh,
+            latestBalances: balances,
+            monthTokens: monthTokens,
+            tokenUsageIsFresh: tokenFresh
         )
     }
 
@@ -208,5 +222,202 @@ final class AlertEngineTests: XCTestCase {
         XCTAssertEqual(alerts.first?.kind, .budgetWarning)
         try store.acknowledgeAlert(id: alerts[0].id)
         XCTAssertEqual(try store.alerts().first?.acknowledged, true)
+    }
+
+    func testAlertLinesBudgetFollowPublicAndRearm() throws {
+        let config = AccountAlertConfig(
+            warning: AlertLineRule(mode: .followPublic, metric: .budgetPercent),
+            critical: AlertLineRule(mode: .custom, metric: .budgetPercent, value: 120)
+        )
+        let publicConfig = PublicAlertConfig(warningPercent: 80, criticalPercent: 120)
+        let budget = Budget(amount: 100, currency: "USD")
+
+        var events = try engine.evaluate(snapshot(
+            budget: budget, monthSpend: 85,
+            alertConfig: config, publicConfig: publicConfig
+        ))
+        XCTAssertEqual(events.map(\.kind), [.lineWarning])
+        XCTAssertEqual(events.first?.threshold, "80%")
+        XCTAssertTrue(events.first?.metric.contains("公共告知线") ?? false)
+
+        events = try engine.evaluate(snapshot(
+            budget: budget, monthSpend: 50,
+            alertConfig: config, publicConfig: publicConfig
+        ))
+        XCTAssertTrue(events.isEmpty, "恢复后不重复触发，但状态应重新布防")
+
+        events = try engine.evaluate(snapshot(
+            budget: budget, monthSpend: 85,
+            alertConfig: config, publicConfig: publicConfig
+        ))
+        XCTAssertEqual(events.map(\.kind), [.lineWarning], "恢复后再次越线应重新触发")
+
+        events = try engine.evaluate(snapshot(
+            budget: budget, monthSpend: 125,
+            alertConfig: config, publicConfig: publicConfig
+        ))
+        XCTAssertEqual(events.map(\.kind), [.lineCritical])
+        XCTAssertEqual(events.first?.threshold, "120%")
+    }
+
+    func testPublicThresholdChangeOnlyAppliesToFollowPublic() throws {
+        let config = AccountAlertConfig(
+            warning: AlertLineRule(mode: .followPublic, metric: .budgetPercent),
+            critical: .off
+        )
+        let budget = Budget(amount: 100, currency: "USD")
+
+        var events = try engine.evaluate(snapshot(
+            budget: budget, monthSpend: 75,
+            alertConfig: config,
+            publicConfig: PublicAlertConfig(warningPercent: 80, criticalPercent: 100)
+        ))
+        XCTAssertTrue(events.isEmpty)
+
+        events = try engine.evaluate(snapshot(
+            budget: budget, monthSpend: 75,
+            alertConfig: config,
+            publicConfig: PublicAlertConfig(warningPercent: 70, criticalPercent: 100)
+        ))
+        XCTAssertEqual(events.map(\.kind), [.lineWarning])
+    }
+
+    func testAlertLinesBalanceAbsoluteAndTokenAbsolute() throws {
+        let balanceConfig = AccountAlertConfig(
+            warning: AlertLineRule(mode: .custom, metric: .balanceAbsolute, value: 50, currency: "USD"),
+            critical: .off
+        )
+        var events = try engine.evaluate(snapshot(
+            alertConfig: balanceConfig,
+            balances: [balance(40)]
+        ))
+        XCTAssertEqual(events.map(\.kind), [.lineWarning])
+        XCTAssertEqual(events.first?.threshold, "50")
+
+        events = try engine.evaluate(snapshot(
+            alertConfig: balanceConfig,
+            balances: [balance(60)]
+        ))
+        XCTAssertTrue(events.isEmpty)
+
+        events = try engine.evaluate(snapshot(
+            alertConfig: balanceConfig,
+            balances: [balance(40)]
+        ))
+        XCTAssertEqual(events.map(\.kind), [.lineWarning])
+
+        let tokenConfig = AccountAlertConfig(
+            warning: AlertLineRule(mode: .custom, metric: .tokenAbsolute, value: 900),
+            critical: .off
+        )
+        let tokenStore = try OverplayStore.inMemory()
+        let tokenEngine = AlertEngine(store: tokenStore)
+        events = try tokenEngine.evaluate(snapshot(
+            alertConfig: tokenConfig,
+            monthTokens: 1_000,
+            tokenFresh: true
+        ))
+        XCTAssertEqual(events.map(\.kind), [.lineWarning])
+
+        let staleStore = try OverplayStore.inMemory()
+        let staleEngine = AlertEngine(store: staleStore)
+        events = try staleEngine.evaluate(snapshot(
+            alertConfig: tokenConfig,
+            monthTokens: 1_000,
+            tokenFresh: false
+        ))
+        XCTAssertTrue(events.isEmpty, "数据不新鲜时不得触发 Token 绝对值告警")
+    }
+
+    func testAlertLineQuotaPercentRequiresDenominatorAndFreshData() throws {
+        let config = AccountAlertConfig(
+            warning: AlertLineRule(mode: .custom, metric: .quotaPercent, value: 90),
+            critical: .off
+        )
+        let quota = QuotaSnapshot(
+            accountId: accountId,
+            totalCredits: 100,
+            totalUsage: 95,
+            remaining: 5,
+            currency: "USD",
+            asOf: now,
+            source: "test"
+        )
+        var events = try engine.evaluate(snapshot(
+            alertConfig: config,
+            quota: quota,
+            quotaFresh: true
+        ))
+        XCTAssertEqual(events.map(\.kind), [.lineWarning])
+        XCTAssertEqual(events.first?.threshold, "90%")
+
+        let noDenominator = QuotaSnapshot(
+            accountId: accountId,
+            totalCredits: 0,
+            totalUsage: 0,
+            remaining: 0,
+            currency: "USD",
+            asOf: now,
+            source: "test"
+        )
+        let otherStore = try OverplayStore.inMemory()
+        let otherEngine = AlertEngine(store: otherStore)
+        events = try otherEngine.evaluate(snapshot(
+            alertConfig: config,
+            quota: noDenominator,
+            quotaFresh: true
+        ))
+        XCTAssertTrue(events.isEmpty, "无分母时不得计算百分比")
+
+        events = try otherEngine.evaluate(snapshot(
+            alertConfig: config,
+            quota: quota,
+            quotaFresh: false
+        ))
+        XCTAssertTrue(events.isEmpty, "数据不新鲜时不得触发配额告警")
+    }
+
+    func testAlertLineBudgetRefiresInNewMonth() throws {
+        let config = AccountAlertConfig(
+            warning: AlertLineRule(mode: .followPublic, metric: .budgetPercent),
+            critical: .off
+        )
+        let budget = Budget(amount: 100, currency: "USD")
+        let publicConfig = PublicAlertConfig(warningPercent: 80, criticalPercent: 100)
+
+        var events = try engine.evaluate(snapshot(
+            budget: budget, monthSpend: 85,
+            alertConfig: config, publicConfig: publicConfig
+        ))
+        XCTAssertEqual(events.map(\.kind), [.lineWarning])
+        events = try engine.evaluate(snapshot(
+            budget: budget, monthSpend: 85,
+            alertConfig: config, publicConfig: publicConfig
+        ))
+        XCTAssertTrue(events.isEmpty)
+
+        let nextMonth = TestClock.date(2026, 11, 5)
+        events = try engine.evaluate(snapshot(
+            budget: budget, monthSpend: 85,
+            at: nextMonth,
+            alertConfig: config, publicConfig: publicConfig
+        ))
+        XCTAssertEqual(events.map(\.kind), [.lineWarning], "新自然月应重新触发一次")
+    }
+
+    func testAlertLineRulesRequirePercentForFollowPublic() {
+        XCTAssertTrue(AccountAlertConfig.off.resolved(public: PublicAlertConfig()).isEmpty)
+
+        let config = AccountAlertConfig(
+            warning: AlertLineRule(mode: .followPublic, metric: .balanceAbsolute),
+            critical: .off
+        )
+        XCTAssertTrue(config.resolved(public: PublicAlertConfig()).isEmpty)
+
+        let custom = AccountAlertConfig(
+            warning: AlertLineRule(mode: .custom, metric: .quotaPercent, value: 90),
+            critical: .off
+        )
+        XCTAssertEqual(custom.resolved(public: PublicAlertConfig()).first?.threshold, 90)
     }
 }

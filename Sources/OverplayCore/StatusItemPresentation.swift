@@ -33,10 +33,10 @@ public struct StatusItemPresentation: Equatable, Sendable {
             $0.kind == .credentialInvalid || $0.kind == .syncFailed
         }
         let critical = unacknowledged.contains {
-            $0.kind == .budgetExceeded || $0.kind == .balanceLow
+            $0.kind == .budgetExceeded || $0.kind == .balanceLow || $0.kind == .lineCritical
         }
         let warning = unacknowledged.contains {
-            $0.kind == .budgetWarning || $0.kind == .dataStale
+            $0.kind == .budgetWarning || $0.kind == .dataStale || $0.kind == .lineWarning
         }
 
         let symbolName: String

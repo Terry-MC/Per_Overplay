@@ -63,4 +63,15 @@ final class StatusItemPresentationTests: XCTestCase {
         XCTAssertEqual(presentation.severity, .normal)
         XCTAssertEqual(presentation.symbolName, "chart.bar.xaxis")
     }
+
+    func testAlertLinesDriveTraySeverity() {
+        XCTAssertEqual(
+            StatusItemPresentation.make(isDemo: false, alerts: [alert(.lineWarning)]).severity,
+            .warning
+        )
+        XCTAssertEqual(
+            StatusItemPresentation.make(isDemo: false, alerts: [alert(.lineCritical)]).severity,
+            .critical
+        )
+    }
 }
