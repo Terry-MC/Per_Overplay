@@ -142,12 +142,11 @@ struct AddProviderView: View {
                         }
                     }
                     .disabled(
-                        model.isDemo || isTesting
-                            || apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        isTesting || apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     )
                 }
                 if model.isDemo {
-                    Text("演示模式不发起网络请求：新增厂商与连接测试的真实表单不可用，避免误触真实端点。")
+                    Text("演示模式只模拟连接测试，不发起网络请求、不写 Keychain、不保存账户。")
                         .font(.caption2)
                         .foregroundStyle(.orange)
                 }
@@ -379,9 +378,20 @@ struct AddProviderView: View {
     }
 
     private func runTest() async {
-        guard !model.isDemo else { return }
         formError = nil
         testResult = nil
+        if model.isDemo {
+            isTesting = true
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            testResult = ConnectionTestResult(
+                category: .success,
+                message: "演示模式：模拟连接成功；未联网、未写 Keychain、未保存账户",
+                capabilities: provider == .genericHTTP ? genericConfig?.capabilities : provider.capabilities
+            )
+            isTesting = false
+            model.hasUnsavedChanges = true
+            return
+        }
         isTesting = true
         defer { isTesting = false }
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
