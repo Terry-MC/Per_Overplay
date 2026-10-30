@@ -182,19 +182,45 @@ func providerStyle(for provider: ProviderKind) -> ProviderStyle {
     }
 }
 
+enum AccountIconCatalog {
+    static let options = [
+        "server.rack", "cloud", "creditcard", "chart.bar.xaxis",
+        "network", "building.2", "bolt.horizontal.circle"
+    ]
+
+    static func normalized(_ name: String?) -> String? {
+        guard let name = name?.trimmingCharacters(in: .whitespacesAndNewlines),
+              options.contains(name) else { return nil }
+        return name
+    }
+}
+
 struct ProviderMark: View {
     var provider: ProviderKind
+    var iconName: String?
+
+    init(provider: ProviderKind, iconName: String? = nil) {
+        self.provider = provider
+        self.iconName = iconName
+    }
 
     var body: some View {
         let style = providerStyle(for: provider)
+        let icon = AccountIconCatalog.normalized(iconName)
         RoundedRectangle(cornerRadius: 9, style: .continuous)
             .fill(style.color.opacity(0.16))
             .frame(width: 34, height: 34)
-            .overlay(
-                Text(style.abbreviation)
-                    .font(style.abbreviation.count > 1 ? .caption.weight(.bold) : .headline.weight(.bold))
-                    .foregroundStyle(style.color)
-            )
+            .overlay {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(style.color)
+                } else {
+                    Text(style.abbreviation)
+                        .font(style.abbreviation.count > 1 ? .caption.weight(.bold) : .headline.weight(.bold))
+                        .foregroundStyle(style.color)
+                }
+            }
             .accessibilityLabel(provider.displayName)
     }
 }
@@ -486,6 +512,7 @@ enum AppPanels {
         alert.addButton(withTitle: "返回")
         if alert.runModal() == .alertFirstButtonReturn {
             model.hasUnsavedChanges = false
+            model.providerFormResetToken = UUID()
             return true
         }
         return false

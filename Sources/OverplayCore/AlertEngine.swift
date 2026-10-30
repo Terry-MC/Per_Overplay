@@ -26,6 +26,7 @@ public struct AlertSnapshot {
     public var latestBalances: [BalanceSnapshot]
     public var monthTokens: Int?
     public var tokenUsageIsFresh: Bool
+    public var capabilities: ProviderCapabilities?
 
     public init(
         accountId: String,
@@ -52,7 +53,8 @@ public struct AlertSnapshot {
         quotaIsFresh: Bool = false,
         latestBalances: [BalanceSnapshot] = [],
         monthTokens: Int? = nil,
-        tokenUsageIsFresh: Bool = false
+        tokenUsageIsFresh: Bool = false,
+        capabilities: ProviderCapabilities? = nil
     ) {
         self.accountId = accountId
         self.accountName = accountName
@@ -79,6 +81,7 @@ public struct AlertSnapshot {
         self.latestBalances = latestBalances
         self.monthTokens = monthTokens
         self.tokenUsageIsFresh = tokenUsageIsFresh
+        self.capabilities = capabilities
     }
 }
 
@@ -171,7 +174,7 @@ public final class AlertEngine {
     private func metricValue(rule: ResolvedAlertRule, snapshot: AlertSnapshot) -> Decimal? {
         switch rule.metric {
         case .budgetPercent:
-            guard snapshot.provider.capabilities.usage,
+            guard (snapshot.capabilities ?? snapshot.provider.capabilities).usage,
                   let budget = snapshot.budget,
                   budget.amount > 0,
                   let spend = snapshot.monthSpend,
@@ -210,7 +213,7 @@ public final class AlertEngine {
     }
 
     private func evaluateBudget(_ snapshot: AlertSnapshot) throws -> [AlertEvent] {
-        guard snapshot.provider.capabilities.usage,
+        guard (snapshot.capabilities ?? snapshot.provider.capabilities).usage,
               let budget = snapshot.budget,
               budget.amount > 0,
               let spend = snapshot.monthSpend,

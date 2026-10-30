@@ -17,6 +17,8 @@ public struct FloatingLine: Equatable, Sendable {
 public struct FloatingAccountRow: Identifiable, Equatable, Sendable {
     public var id: String
     public var name: String
+    public var officialName: String?
+    public var iconName: String?
     public var provider: ProviderKind
     public var isDemo: Bool
     public var enabled: Bool
@@ -33,6 +35,8 @@ public struct FloatingAccountRow: Identifiable, Equatable, Sendable {
     public init(
         id: String,
         name: String,
+        officialName: String? = nil,
+        iconName: String? = nil,
         provider: ProviderKind,
         isDemo: Bool,
         enabled: Bool,
@@ -48,6 +52,8 @@ public struct FloatingAccountRow: Identifiable, Equatable, Sendable {
     ) {
         self.id = id
         self.name = name
+        self.officialName = officialName
+        self.iconName = iconName
         self.provider = provider
         self.isDemo = isDemo
         self.enabled = enabled
@@ -137,9 +143,9 @@ public enum FloatingSummaryBuilder {
         alerts: [AlertEvent],
         now: Date
     ) -> FloatingSummary {
-        let usageAccounts = accounts.filter { $0.provider.capabilities.usage }
-        let balanceAccounts = accounts.filter { $0.provider.capabilities.balance }
-        let creditAccounts = accounts.filter { $0.provider.capabilities.credits }
+        let usageAccounts = accounts.filter { $0.capabilities.usage }
+        let balanceAccounts = accounts.filter { $0.capabilities.balance }
+        let creditAccounts = accounts.filter { $0.capabilities.credits }
         let today = CalendarDay.string(for: now, timeZone: CalendarDay.utc)
         let todayRecords = usageRecords.filter { $0.day == today }
         let lastThirty = CalendarDay.range(preset: .thirty, now: now)
@@ -267,7 +273,7 @@ public enum FloatingSummaryBuilder {
     ) -> FloatingAccountRow {
         var primaryLines: [FloatingLine] = []
         let primaryStatus: DataStatus
-        if account.provider.capabilities.balance {
+        if account.capabilities.balance {
             primaryStatus = AccountDataStatus.balance(account: account, balances: balances)
             for snapshot in balances {
                 primaryLines.append(FloatingLine(
@@ -277,7 +283,7 @@ public enum FloatingSummaryBuilder {
                     status: primaryStatus
                 ))
             }
-        } else if account.provider.capabilities.credits {
+        } else if account.capabilities.credits {
             primaryStatus = AccountDataStatus.quota(account: account, quota: quota)
             if let quota, primaryStatus.isActual {
                 primaryLines.append(FloatingLine(
@@ -286,6 +292,19 @@ public enum FloatingSummaryBuilder {
                     currency: quota.currency,
                     status: primaryStatus
                 ))
+            }
+        } else if account.capabilities.usage {
+            primaryStatus = AccountDataStatus.usage(account: account, records: usageRecords)
+            let totals = ProviderAnalysisMetrics.totals(records: usageRecords, account: account)
+            if totals.costAvailable {
+                for currency in totals.costs.keys.sorted() {
+                    primaryLines.append(FloatingLine(
+                        label: "所选范围费用",
+                        value: totals.costs[currency] ?? 0,
+                        currency: currency,
+                        status: primaryStatus
+                    ))
+                }
             }
         } else {
             primaryStatus = .unavailable("该平台没有可用主指标")
@@ -327,6 +346,8 @@ public enum FloatingSummaryBuilder {
         return FloatingAccountRow(
             id: account.id,
             name: account.displayName,
+            officialName: account.officialName,
+            iconName: account.iconName,
             provider: account.provider,
             isDemo: account.isDemo,
             enabled: account.enabled,

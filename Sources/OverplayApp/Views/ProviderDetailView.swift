@@ -67,7 +67,7 @@ struct ProviderDetailView: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: 12) {
-            ProviderMark(provider: account.provider)
+            ProviderMark(provider: account.provider, iconName: account.iconName)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(account.displayName)
@@ -76,9 +76,15 @@ struct ProviderDetailView: View {
                     if organizationTag { DetailTag(text: "组织级", color: .blue) }
                     if !account.enabled { DetailTag(text: "已禁用", color: .secondary) }
                 }
-                Text("\(account.provider.displayName) · \(model.capabilitySummary(for: account))")
-                    .font(.caption)
-                    .foregroundStyle(account.credentialInvalid ? .red : .secondary)
+                Text(
+                    [
+                        account.provider.displayName,
+                        account.officialName.map { "官方 \($0)" },
+                        model.capabilitySummary(for: account)
+                    ].compactMap { $0 }.joined(separator: " · ")
+                )
+                .font(.caption)
+                .foregroundStyle(account.credentialInvalid ? .red : .secondary)
                 Text("数据来源：\(sourceDescription) · 最近成功 \(lastSuccessText)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)

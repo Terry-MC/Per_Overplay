@@ -117,8 +117,8 @@ public final class GenericHTTPConnector: ProviderConnector {
         case 403:
             throw GenericHTTPFailure(
                 category: .permission,
-                message: "权限或额度受限（HTTP 403）",
-                status: .invalidCredential,
+                message: "权限或额度受限（HTTP 403），请检查 Key 权限或端点访问范围",
+                status: .failed,
                 httpStatus: 403
             )
         case 429:

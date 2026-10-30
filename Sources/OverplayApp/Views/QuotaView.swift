@@ -42,7 +42,7 @@ struct QuotaView: View {
         ) {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 10) {
-                    ProviderMark(provider: account.provider)
+                    ProviderMark(provider: account.provider, iconName: account.iconName)
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
                             Text(account.displayName).font(.headline)
@@ -68,7 +68,7 @@ struct QuotaView: View {
                     AnomalyNotice(message: issue)
                 }
 
-                if account.provider.capabilities.balance {
+                if account.capabilities.balance {
                     deepSeekSection(account)
                 } else {
                     openRouterSection(account)
@@ -80,9 +80,10 @@ struct QuotaView: View {
     private func accountSubtitle(_ account: Account) -> String {
         [
             account.provider.displayName,
+            account.officialName.map { "官方 \($0)" },
             model.currencyLabel(for: account),
             model.capabilitySummary(for: account)
-        ].joined(separator: " · ")
+        ].compactMap { $0 }.joined(separator: " · ")
     }
 
     @ViewBuilder

@@ -314,7 +314,7 @@ private struct ProviderOverviewCard: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: 10) {
-            ProviderMark(provider: account.provider)
+            ProviderMark(provider: account.provider, iconName: account.iconName)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(account.displayName)
@@ -369,9 +369,10 @@ private struct ProviderOverviewCard: View {
     private var subtitle: String {
         [
             account.provider.displayName,
+            account.officialName.map { "官方 \($0)" },
             model.currencyLabel(for: account),
             account.capabilities.summary
-        ].joined(separator: " · ")
+        ].compactMap { $0 }.joined(separator: " · ")
     }
 
     @ViewBuilder

@@ -126,6 +126,7 @@ final class AppModel: ObservableObject {
     @Published var balanceCurrencyFilter: String?
     @Published var selectedProviderDetailAccountId: String?
     @Published var providerDetailVisible = false
+    @Published var providerFormResetToken = UUID()
     @Published var debugDeleteAccountId: String?
     @Published var showMessageCenter = false
     @Published var hasUnsavedChanges = false
@@ -460,27 +461,20 @@ final class AppModel: ObservableObject {
     ) throws -> Account {
         guard !isDemo else { throw AppActionError.demoReadOnly }
         guard let realStore else { throw AppActionError.storage("本地数据库不可用") }
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedKey.isEmpty else { throw AppActionError.emptyKey }
-        if provider == .genericHTTP {
-            guard let genericConfig else {
-                throw AppActionError.storage("通用 HTTP 缺少端点配置")
-            }
-            _ = try genericConfig.requestURL()
-        }
-        let resolvedName = trimmedName.isEmpty ? provider.displayName : trimmedName
-        if accounts.contains(where: {
-            $0.provider == provider && $0.displayName.caseInsensitiveCompare(resolvedName) == .orderedSame
-        }) {
-            throw AppActionError.duplicateAccount
-        }
+        let resolvedName = try AccountInputValidator.validateNewAccount(
+            provider: provider,
+            name: name,
+            credential: trimmedKey,
+            genericConfig: genericConfig,
+            existingAccounts: accounts
+        )
         let account = Account(
             provider: provider,
             name: resolvedName,
             isDemo: false,
             officialName: officialName?.nilIfBlank,
-            iconName: iconName?.nilIfBlank,
+            iconName: AccountIconCatalog.normalized(iconName),
             genericConfig: genericConfig,
             alertConfig: alertConfig ?? .off
         )
@@ -524,8 +518,8 @@ final class AppModel: ObservableObject {
             _ = try resolvedGeneric.requestURL()
         }
         let profile = OverplayStore.AccountProfile(
-            officialName: officialName?.nilIfBlank ?? account.officialName,
-            iconName: iconName?.nilIfBlank ?? account.iconName,
+            officialName: officialName.map { $0.nilIfBlank } ?? account.officialName,
+            iconName: iconName.map { AccountIconCatalog.normalized($0) } ?? account.iconName,
             genericConfig: resolvedGeneric,
             alertConfig: alertConfig ?? account.alertConfig
         )
@@ -851,7 +845,7 @@ final class AppModel: ObservableObject {
     }
 
     var overviewUsageRecords: [UsageRecord] {
-        let scoped = overviewAccountsToShow.filter { $0.provider.capabilities.usage }
+        let scoped = overviewAccountsToShow.filter { $0.capabilities.usage }
         return DashboardMetrics.usageRecords(usageRecords, for: scoped)
     }
 
@@ -965,7 +959,7 @@ final class AppModel: ObservableObject {
     }
 
     var officialCreditsRemaining: [String: Decimal] {
-        let scoped = overviewAccountsToShow.filter { $0.provider.capabilities.credits }
+        let scoped = overviewAccountsToShow.filter { $0.capabilities.credits }
         return DashboardMetrics.creditsRemaining(accounts: scoped, quotas: quotas)
     }
 
@@ -987,7 +981,7 @@ final class AppModel: ObservableObject {
     }
 
     var availableBalanceCurrencies: [String] {
-        let scoped = overviewAccountsToShow.filter { $0.provider.capabilities.balance }
+        let scoped = overviewAccountsToShow.filter { $0.capabilities.balance }
         return DashboardMetrics.balanceCurrencies(accounts: scoped, balances: balances)
     }
 
@@ -997,7 +991,7 @@ final class AppModel: ObservableObject {
 
     var officialBalances: [String: Decimal] {
         guard let balanceCurrencyFilter else { return [:] }
-        let scoped = overviewAccountsToShow.filter { $0.provider.capabilities.balance }
+        let scoped = overviewAccountsToShow.filter { $0.capabilities.balance }
         guard let total = DashboardMetrics.balanceTotal(
             accounts: scoped,
             balances: balances,
@@ -1011,7 +1005,7 @@ final class AppModel: ObservableObject {
     }
 
     func currencyLabel(for account: Account) -> String {
-        if account.provider.capabilities.balance {
+        if account.capabilities.balance {
             let currencies = balanceCurrencies(for: account)
             if currencies.isEmpty {
                 return account.lastSuccessAt == nil ? "币种待同步" : "币种未知"
@@ -1022,11 +1016,11 @@ final class AppModel: ObservableObject {
     }
 
     var usageAccounts: [Account] {
-        accounts.filter { $0.provider.capabilities.usage }
+        accounts.filter { $0.capabilities.usage }
     }
 
     var creditAccounts: [Account] {
-        accounts.filter { $0.provider.capabilities.credits }
+        accounts.filter { $0.capabilities.credits }
     }
 
     var activeDeepSeekAccounts: [Account] {
@@ -1071,14 +1065,14 @@ final class AppModel: ObservableObject {
     }
 
     private var scopedUsageAccounts: [Account] {
-        overviewAccountsToShow.filter { $0.provider.capabilities.usage }
+        overviewAccountsToShow.filter { $0.capabilities.usage }
     }
 
     private func overviewUsageDataStatus() -> DataStatus {
-        if let selectedOverviewAccount, !selectedOverviewAccount.provider.capabilities.usage {
+        if let selectedOverviewAccount, !selectedOverviewAccount.capabilities.usage {
             return .unavailable("所选账户为 \(selectedOverviewAccount.provider.displayName)，不提供历史费用 / 用量")
         }
-        if let platform = overviewPlatformFilter, !platform.capabilities.usage {
+        if let platform = overviewPlatformFilter, platform != .genericHTTP, !platform.capabilities.usage {
             return .unavailable("\(platform.displayName) 平台不提供历史费用 / 用量")
         }
         return usageRecordsStatus(
@@ -1109,15 +1103,15 @@ final class AppModel: ObservableObject {
 
     func creditDataStatus() -> DataStatus {
         if let selectedOverviewAccount {
-            guard selectedOverviewAccount.provider.capabilities.credits else {
+            guard selectedOverviewAccount.capabilities.credits else {
                 return .unavailable("所选账户为 \(selectedOverviewAccount.provider.displayName)，不提供官方额度")
             }
             return creditDataStatus(for: selectedOverviewAccount)
         }
-        if let platform = overviewPlatformFilter, !platform.capabilities.credits {
+        if let platform = overviewPlatformFilter, platform != .genericHTTP, !platform.capabilities.credits {
             return .unavailable("\(platform.displayName) 平台不提供官方额度")
         }
-        let scoped = overviewAccountsToShow.filter { $0.provider.capabilities.credits }
+        let scoped = overviewAccountsToShow.filter { $0.capabilities.credits }
         guard !scoped.isEmpty else {
             return .missing("所选范围没有提供官方额度的账户")
         }
@@ -1138,10 +1132,10 @@ final class AppModel: ObservableObject {
                 balances: latestBalances(for: account)
             )
         }
-        if let platform = overviewPlatformFilter, !platform.capabilities.balance {
+        if let platform = overviewPlatformFilter, platform != .genericHTTP, !platform.capabilities.balance {
             return .unavailable("\(platform.displayName) 平台不提供官方余额")
         }
-        let scoped = overviewAccountsToShow.filter { $0.provider.capabilities.balance }
+        let scoped = overviewAccountsToShow.filter { $0.capabilities.balance }
         guard !scoped.isEmpty else {
             return .missing("所选范围没有提供官方余额的账户")
         }
@@ -1218,10 +1212,10 @@ final class AppModel: ObservableObject {
         if let lastSuccess = account.lastSuccessAt {
             if now.timeIntervalSince(lastSuccess) > settings.refreshInterval * 2 { return .stale }
             if account.lastError != nil { return .partial }
-            if account.provider.capabilities.balance, latestBalances(for: account).isEmpty {
+            if account.capabilities.balance, latestBalances(for: account).isEmpty {
                 return .connectedNoData
             }
-            if account.provider.capabilities.credits, latestQuota(for: account) == nil {
+            if account.capabilities.credits, latestQuota(for: account) == nil {
                 return .connectedNoData
             }
             return .healthy
@@ -1249,7 +1243,7 @@ final class AppModel: ObservableObject {
             if account.lastError != nil { return "能力未验证（同步失败）" }
             return "等待连接测试"
         }
-        let capabilities = account.provider.capabilities
+        let capabilities = account.capabilities
         if account.lastError != nil {
             if capabilities.credits {
                 return latestQuota(for: account) == nil

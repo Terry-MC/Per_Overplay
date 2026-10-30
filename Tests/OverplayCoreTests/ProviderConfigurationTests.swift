@@ -124,6 +124,125 @@ final class ProviderConfigurationTests: XCTestCase {
         XCTAssertEqual(malformedOutcome.failureCategory, .malformed)
     }
 
+    func testGenericConnectorClassifiesAllHTTPFailureCategories() async {
+        let account = Account(provider: .genericHTTP, name: "Generic", genericConfig: genericConfig)
+
+        func outcome(_ response: HTTPResponse) async -> SyncOutcome {
+            let connector = GenericHTTPConnector(
+                config: genericConfig,
+                transport: FakeHTTPTransport([response])
+            )
+            return await connector.sync(account: account, credential: "secret", now: now)
+        }
+
+        var result = await outcome(response(403))
+        XCTAssertEqual(result.failureCategory, .permission)
+        XCTAssertEqual(result.status, .failed, "403 不应永久标记凭据失效")
+
+        result = await outcome(response(429, headers: ["Retry-After": "30"]))
+        XCTAssertEqual(result.failureCategory, .rateLimited)
+        XCTAssertEqual(result.retryAfter, 30)
+
+        for status in [400, 404, 405] {
+            result = await outcome(response(status))
+            XCTAssertEqual(result.failureCategory, .address, "HTTP \(status) 应归类为地址 / 端点错误")
+        }
+    }
+
+    func testGenericConnectorClassifiesTransportFailures() async {
+        let account = Account(provider: .genericHTTP, name: "Generic", genericConfig: genericConfig)
+
+        func outcome(_ error: HTTPTransportError) async -> SyncOutcome {
+            let connector = GenericHTTPConnector(
+                config: genericConfig,
+                transport: FakeHTTPTransport([Result<HTTPResponse, HTTPTransportError>.failure(error)])
+            )
+            return await connector.sync(account: account, credential: "secret", now: now)
+        }
+
+        let timeoutOutcome = await outcome(.timedOut)
+        XCTAssertEqual(timeoutOutcome.failureCategory, .timeout)
+        let offlineOutcome = await outcome(.offline)
+        XCTAssertEqual(offlineOutcome.failureCategory, .network)
+        let redirectOutcome = await outcome(.redirectRejected)
+        XCTAssertEqual(redirectOutcome.failureCategory, .address)
+    }
+
+    func testAccountInputValidation() throws {
+        let existing = Account(provider: .deepseek, name: "主账户")
+        XCTAssertEqual(
+            try AccountInputValidator.validateNewAccount(
+                provider: .deepseek,
+                name: "  新账户 ",
+                credential: "key",
+                genericConfig: nil,
+                existingAccounts: [existing]
+            ),
+            "新账户"
+        )
+        XCTAssertThrowsError(
+            try AccountInputValidator.validateNewAccount(
+                provider: .deepseek,
+                name: "",
+                credential: "  ",
+                genericConfig: nil,
+                existingAccounts: []
+            )
+        ) { error in
+            XCTAssertEqual(error as? AccountValidationError, .emptyCredential)
+        }
+        XCTAssertThrowsError(
+            try AccountInputValidator.validateNewAccount(
+                provider: .deepseek,
+                name: "主账户",
+                credential: "key",
+                genericConfig: nil,
+                existingAccounts: [existing]
+            )
+        ) { error in
+            XCTAssertEqual(error as? AccountValidationError, .duplicateName)
+        }
+        XCTAssertThrowsError(
+            try AccountInputValidator.validateNewAccount(
+                provider: .genericHTTP,
+                name: "Custom",
+                credential: "key",
+                genericConfig: nil,
+                existingAccounts: []
+            )
+        ) { error in
+            XCTAssertEqual(error as? AccountValidationError, .missingGenericConfig)
+        }
+        XCTAssertThrowsError(
+            try AccountInputValidator.validateNewAccount(
+                provider: .genericHTTP,
+                name: "Custom",
+                credential: "key",
+                genericConfig: GenericHTTPConfig(baseURL: "https://api.example.com"),
+                existingAccounts: []
+            )
+        ) { error in
+            XCTAssertEqual(error as? AccountValidationError, .missingMapping)
+        }
+        XCTAssertThrowsError(
+            try AccountInputValidator.validateNewAccount(
+                provider: .genericHTTP,
+                name: "Custom",
+                credential: "key",
+                genericConfig: GenericHTTPConfig(
+                    baseURL: "http://api.example.com",
+                    mapping: GenericFieldMapping(balanceTotal: "total", balanceCurrency: "currency")
+                ),
+                existingAccounts: []
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? AccountValidationError,
+                .invalidGenericConfig(.requiresHTTPS)
+            )
+        }
+    }
+
     func testGenericConnectorRejectsSSRFBeforeNetwork() async {
         let config = GenericHTTPConfig(
             baseURL: "https://127.0.0.1",

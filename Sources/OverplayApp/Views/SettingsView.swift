@@ -115,15 +115,22 @@ struct SettingsView: View {
                 } else {
                     ForEach(model.accounts) { account in
                         HStack(spacing: 10) {
-                            ProviderMark(provider: account.provider)
+                            ProviderMark(provider: account.provider, iconName: account.iconName)
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 6) {
                                     Text(account.displayName).font(.subheadline.weight(.semibold))
                                     if model.isDemo || account.isDemo { DemoTag() }
                                 }
-                                Text(account.provider.displayName + " · " + model.currencyLabel(for: account) + " · " + model.capabilitySummary(for: account))
-                                    .font(.caption)
-                                    .foregroundStyle(account.credentialInvalid ? .red : .secondary)
+                                Text(
+                                    [
+                                        account.provider.displayName,
+                                        account.officialName.map { "官方 \($0)" },
+                                        model.currencyLabel(for: account),
+                                        model.capabilitySummary(for: account)
+                                    ].compactMap { $0 }.joined(separator: " · ")
+                                )
+                                .font(.caption)
+                                .foregroundStyle(account.credentialInvalid ? .red : .secondary)
                                 Text(model.lastSyncText(for: account))
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)

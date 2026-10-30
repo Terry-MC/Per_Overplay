@@ -224,7 +224,8 @@ public final class SyncEngine {
                 quotaIsFresh: usageFresh,
                 latestBalances: alertBalances(accountId: account.id),
                 monthTokens: monthTokenTotal(accountId: account.id, now: now),
-                tokenUsageIsFresh: usageFresh
+                tokenUsageIsFresh: usageFresh,
+                capabilities: account.capabilities
             )
             if let events = try? alertEngine.evaluate(snapshot), !events.isEmpty {
                 all.append(contentsOf: events)
@@ -370,7 +371,8 @@ public final class SyncEngine {
             quotaIsFresh: usageFresh,
             latestBalances: alertBalances(accountId: account.id),
             monthTokens: monthTokenTotal(accountId: account.id, now: now),
-            tokenUsageIsFresh: usageFresh
+            tokenUsageIsFresh: usageFresh,
+            capabilities: account.capabilities
         )
         if let events = try? alertEngine.evaluate(snapshot), !events.isEmpty {
             emit(.alerts(events))

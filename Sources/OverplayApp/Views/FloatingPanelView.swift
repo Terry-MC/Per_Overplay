@@ -399,13 +399,19 @@ struct FloatingPanelView: View {
     private func accountRow(_ row: FloatingAccountRow) -> some View {
         VStack(alignment: .leading, spacing: density == .expanded ? 5 : 3) {
             HStack(spacing: 7) {
-                ProviderMark(provider: row.provider)
+                ProviderMark(provider: row.provider, iconName: row.iconName)
                     .scaleEffect(0.72)
                     .frame(width: 26, height: 26)
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 4) {
                         Text(row.name)
                             .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                    }
+                    if let officialName = row.officialName {
+                        Text(officialName)
+                            .font(.system(size: 8))
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
                     HStack(spacing: 5) {

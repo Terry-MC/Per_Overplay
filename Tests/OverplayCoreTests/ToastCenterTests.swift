@@ -119,4 +119,14 @@ final class ToastCenterTests: XCTestCase {
         _ = queue.removeAlert(alertId: "a", now: now)
         XCTAssertTrue(queue.visible.isEmpty)
     }
+
+    func testAlertLineNoticePolicy() {
+        XCTAssertEqual(AlertNoticePolicy.style(for: .lineWarning), .info)
+        XCTAssertEqual(AlertNoticePolicy.style(for: .lineCritical), .error)
+        let warning = AlertNoticePolicy.toast(for: alert(kind: .lineWarning))
+        XCTAssertEqual(warning.duration, 5)
+        XCTAssertTrue(warning.autoDismiss)
+        let critical = AlertNoticePolicy.toast(for: alert(kind: .lineCritical))
+        XCTAssertFalse(critical.autoDismiss)
+    }
 }

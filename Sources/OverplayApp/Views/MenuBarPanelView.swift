@@ -136,7 +136,7 @@ struct MenuBarPanelView: View {
 
     private func accountRow(_ account: Account) -> some View {
         HStack(spacing: 10) {
-            ProviderMark(provider: account.provider)
+            ProviderMark(provider: account.provider, iconName: account.iconName)
                 .scaleEffect(0.84)
                 .frame(width: 30)
             VStack(alignment: .leading, spacing: 2) {
@@ -157,15 +157,20 @@ struct MenuBarPanelView: View {
     }
 
     private func primaryMetric(_ account: Account) -> String {
-        if account.provider.capabilities.credits {
+        if account.capabilities.credits {
             guard let quota = model.latestQuota(for: account) else { return "尚未同步" }
             let label = account.provider == .openrouter ? "credits" : "额度"
             return "\(label) \(Money.formatBalance(quota.remaining, currency: quota.currency)) · 已用 \(Money.formatBalance(quota.totalUsage, currency: quota.currency))"
         }
         let balances = model.latestBalances(for: account)
-        guard !balances.isEmpty else { return "尚未同步" }
-        return balances.map {
-            Money.formatBalance($0.total, currency: $0.currency)
-        }.joined(separator: " · ")
+        if !balances.isEmpty {
+            return balances.map {
+                Money.formatBalance($0.total, currency: $0.currency)
+            }.joined(separator: " · ")
+        }
+        if account.capabilities.usage {
+            return "已连接 · 用量可用"
+        }
+        return "尚未同步"
     }
 }

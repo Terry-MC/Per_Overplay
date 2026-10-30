@@ -9,7 +9,7 @@ struct AddProviderView: View {
     @State private var provider: ProviderKind = .deepseek
     @State private var displayName = ""
     @State private var officialName = ""
-    @State private var iconName = "server.rack"
+    @State private var iconName = ""
     @State private var apiKey = ""
     @State private var baseURL = ""
     @State private var endpointPath = "/"
@@ -34,10 +34,7 @@ struct AddProviderView: View {
     @State private var lastSignature = ""
     @State private var lastConnectionSignature = ""
 
-    private let iconOptions = [
-        "server.rack", "cloud", "creditcard", "chart.bar.xaxis",
-        "network", "building.2", "bolt.horizontal.circle"
-    ]
+    private let iconOptions = AccountIconCatalog.options
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -60,6 +57,9 @@ struct AddProviderView: View {
             guard newValue != lastConnectionSignature else { return }
             lastConnectionSignature = newValue
             testResult = nil
+        }
+        .onChange(of: model.providerFormResetToken) { _, _ in
+            resetForm()
         }
         .sheet(item: $alertAccount) { account in
             AlertLineEditorSheet(
@@ -118,6 +118,7 @@ struct AddProviderView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("图标").font(.caption).foregroundStyle(.secondary)
                         Picker("图标", selection: $iconName) {
+                            Text("默认图标").tag("")
                             ForEach(iconOptions, id: \.self) { name in
                                 Label(name, systemImage: name).tag(name)
                             }
@@ -277,7 +278,7 @@ struct AddProviderView: View {
                 } else {
                     ForEach(model.accounts) { account in
                         HStack(spacing: 10) {
-                            ProviderMark(provider: account.provider)
+                            ProviderMark(provider: account.provider, iconName: account.iconName)
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 6) {
                                     Text(account.displayName).font(.subheadline.weight(.semibold))
@@ -286,9 +287,15 @@ struct AddProviderView: View {
                                         Text("告警线已配置").font(.caption2).foregroundStyle(.blue)
                                     }
                                 }
-                                Text("\(account.provider.displayName) · \(account.capabilities.summary)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                Text(
+                                    [
+                                        account.provider.displayName,
+                                        account.officialName.map { "官方 \($0)" },
+                                        account.capabilities.summary
+                                    ].compactMap { $0 }.joined(separator: " · ")
+                                )
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                             }
                             Spacer()
                             Button("告警线") {
@@ -351,7 +358,10 @@ struct AddProviderView: View {
 
     private var canSave: Bool {
         if let editingAccount {
-            if provider == .genericHTTP, genericConfig != editingAccount.genericConfig {
+            let keyChanged = !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let configurationChanged = provider == .genericHTTP
+                && genericConfig != editingAccount.genericConfig
+            if keyChanged || configurationChanged {
                 return !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     && testResult?.category == .success
             }
@@ -470,7 +480,7 @@ struct AddProviderView: View {
         provider = account.provider
         displayName = account.displayName
         officialName = account.officialName ?? ""
-        iconName = account.iconName ?? "server.rack"
+        iconName = account.iconName ?? ""
         apiKey = ""
         if let config = account.genericConfig {
             baseURL = config.baseURL
@@ -546,7 +556,7 @@ struct AddProviderView: View {
         editingAccount = nil
         displayName = ""
         officialName = ""
-        iconName = "server.rack"
+        iconName = ""
         apiKey = ""
         baseURL = ""
         endpointPath = "/"
@@ -561,6 +571,8 @@ struct AddProviderView: View {
         criticalCurrency = "USD"
         testResult = nil
         formError = nil
+        warningPercent = NSDecimalNumber(decimal: model.settings.publicAlertConfig.warningPercent).stringValue
+        criticalPercent = NSDecimalNumber(decimal: model.settings.publicAlertConfig.criticalPercent).stringValue
         model.hasUnsavedChanges = false
         lastSignature = formSignature
         lastConnectionSignature = connectionSignature
@@ -581,14 +593,16 @@ struct AddProviderView: View {
         [
             provider.rawValue, displayName, officialName, iconName, apiKey,
             baseURL, endpointPath, authMode.rawValue, headerName,
-            mapping.balanceTotal, mapping.balanceCurrency, mapping.creditsTotal,
-            mapping.creditsUsed, mapping.creditsCurrency, mapping.usageDay,
-            mapping.promptTokens, mapping.completionTokens, mapping.requests,
-            mapping.cost, mapping.usageCurrency,
+            mapping.balanceTotal, mapping.balanceCurrency, mapping.balanceGranted,
+            mapping.balanceToppedUp, mapping.creditsTotal, mapping.creditsUsed,
+            mapping.creditsCurrency, mapping.usageDay, mapping.promptTokens,
+            mapping.completionTokens, mapping.requests, mapping.cost,
+            mapping.usageCurrency,
             warningRule.mode.rawValue, warningRule.metric.rawValue, warningValue,
             warningCurrency,
             criticalRule.mode.rawValue, criticalRule.metric.rawValue, criticalValue,
-            criticalCurrency
+            criticalCurrency,
+            warningPercent, criticalPercent
         ].joined(separator: "|")
     }
 }
@@ -706,13 +720,20 @@ private struct AlertLineEditorSheet: View {
     }
 
     private func save() {
-        for (title, rule, valueText) in [
-            ("告知线", warning, warningValue),
-            ("警戒线", critical, criticalValue)
+        for (title, rule, valueText, currencyText) in [
+            ("告知线", warning, warningValue, warningCurrency),
+            ("警戒线", critical, criticalValue, criticalCurrency)
         ] {
-            if rule.mode == .custom, valueText.decimalValue == nil {
-                errorMessage = "\(title)必须是数字"
-                return
+            if rule.mode == .custom {
+                guard let value = valueText.decimalValue, value >= 0 else {
+                    errorMessage = "\(title)必须是大于等于 0 的数字"
+                    return
+                }
+                if rule.metric == .balanceAbsolute,
+                   currencyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    errorMessage = "\(title)的余额币种不能为空"
+                    return
+                }
             }
             if rule.mode == .followPublic, !rule.metric.usesPercent {
                 errorMessage = "\(title)的绝对指标不能跟随公共，请选择自定义"
