@@ -9,6 +9,9 @@ struct QuotaView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
+            if let error = model.analysisRangeError {
+                InlineErrorView(message: error.message)
+            }
             if model.accounts.isEmpty {
                 EmptyStateView(
                     symbol: "gauge.with.dots.needle.50percent",
