@@ -153,25 +153,25 @@ public enum FloatingSummaryBuilder {
         let todayCosts = DashboardMetrics.costs(todayRecords, onDay: today)
         let todayStatus: DataStatus
         if usageAccounts.isEmpty {
-            todayStatus = .unavailable("没有提供用量数据的账户")
+            todayStatus = .unavailable(L10n.t("core.floatingSummary.6cf4d58a81"))
         } else if todayRecords.isEmpty {
-            todayStatus = .missing("今日暂无厂商记录")
+            todayStatus = .missing(L10n.t("core.floatingSummary.3bc04742f0"))
         } else {
             todayStatus = AccountDataStatus.usage(
                 accounts: usageAccounts,
                 records: todayRecords,
-                emptyReason: "今日暂无厂商记录"
+                emptyReason: L10n.t("core.floatingSummary.3bc04742f0")
             )
         }
 
         let credits = DashboardMetrics.creditsRemaining(accounts: creditAccounts, quotas: quotas)
         let creditsStatus: DataStatus
         if creditAccounts.isEmpty {
-            creditsStatus = .unavailable("没有提供官方额度的账户")
+            creditsStatus = .unavailable(L10n.t("core.floatingSummary.67f7c2bdec"))
         } else {
             creditsStatus = AccountDataStatus.aggregate(
                 creditAccounts.map { AccountDataStatus.quota(account: $0, quota: quotas[$0.id]) },
-                emptyReason: "没有官方额度数据"
+                emptyReason: L10n.t("core.floatingSummary.c08e5bec70")
             )
         }
 
@@ -191,7 +191,7 @@ public enum FloatingSummaryBuilder {
         }
         let balancesStatus: DataStatus
         if balanceAccounts.isEmpty {
-            balancesStatus = .unavailable("没有提供官方余额的账户")
+            balancesStatus = .unavailable(L10n.t("core.floatingSummary.56462a3aae"))
         } else {
             balancesStatus = AccountDataStatus.aggregate(
                 balanceAccounts.map {
@@ -200,7 +200,7 @@ public enum FloatingSummaryBuilder {
                         balances: (balances[$0.id] ?? [:]).values.sorted { $0.currency < $1.currency }
                     )
                 },
-                emptyReason: "没有官方余额数据"
+                emptyReason: L10n.t("core.floatingSummary.b591f2271e")
             )
         }
 
@@ -212,14 +212,14 @@ public enum FloatingSummaryBuilder {
         )
         let tokenStatus: DataStatus
         if usageAccounts.isEmpty {
-            tokenStatus = .unavailable("没有提供历史用量的账户")
+            tokenStatus = .unavailable(L10n.t("core.floatingSummary.8d72ee1d77"))
         } else if stats.accountsWithTokens == 0 {
-            tokenStatus = .missing("厂商未提供 token 数据")
+            tokenStatus = .missing(L10n.t("core.floatingSummary.e9ea74d822"))
         } else {
             tokenStatus = AccountDataStatus.usage(
                 accounts: usageAccounts,
                 records: periodRecords,
-                emptyReason: "没有可用的 token 数据"
+                emptyReason: L10n.t("core.floatingSummary.2d4fd21109")
             )
         }
         let requestRecords = periodRecords.filter { $0.requests != nil }
@@ -277,7 +277,7 @@ public enum FloatingSummaryBuilder {
             primaryStatus = AccountDataStatus.balance(account: account, balances: balances)
             for snapshot in balances {
                 primaryLines.append(FloatingLine(
-                    label: "官方余额",
+                    label: L10n.t("core.floatingSummary.f5f1ad2311"),
                     value: snapshot.total,
                     currency: snapshot.currency,
                     status: primaryStatus
@@ -287,7 +287,7 @@ public enum FloatingSummaryBuilder {
             primaryStatus = AccountDataStatus.quota(account: account, quota: quota)
             if let quota, primaryStatus.isActual {
                 primaryLines.append(FloatingLine(
-                    label: "官方额度",
+                    label: L10n.t("core.floatingSummary.f625451199"),
                     value: quota.remaining,
                     currency: quota.currency,
                     status: primaryStatus
@@ -299,7 +299,7 @@ public enum FloatingSummaryBuilder {
             if totals.costAvailable {
                 for currency in totals.costs.keys.sorted() {
                     primaryLines.append(FloatingLine(
-                        label: "所选范围费用",
+                        label: L10n.t("core.floatingSummary.7a286de355"),
                         value: totals.costs[currency] ?? 0,
                         currency: currency,
                         status: primaryStatus
@@ -307,7 +307,7 @@ public enum FloatingSummaryBuilder {
                 }
             }
         } else {
-            primaryStatus = .unavailable("该平台没有可用主指标")
+            primaryStatus = .unavailable(L10n.t("core.floatingSummary.f92ca56dcc"))
         }
 
         var secondaryLines: [FloatingLine] = []
@@ -325,7 +325,7 @@ public enum FloatingSummaryBuilder {
             budgetRatio = BudgetMath.ratio(spend: spend, budget: budget)
             if let spend, let remaining = BudgetMath.remaining(budget: budget, spend: spend) {
                 secondaryLines.append(FloatingLine(
-                    label: remaining < 0 ? "本地预算超支" : "本地预算剩余",
+                    label: remaining < 0 ? L10n.t("core.floatingSummary.918a7858e3") : L10n.t("core.floatingSummary.0681989880"),
                     value: abs(remaining),
                     currency: budget.currency,
                     status: status
@@ -335,11 +335,11 @@ public enum FloatingSummaryBuilder {
 
         var errorSummary: String?
         if account.credentialInvalid {
-            errorSummary = "凭据失效：\(account.lastError ?? "需要重新输入 API Key")"
+            errorSummary = L10n.f("app.29dd8b4768", L10n.t(account.lastError ?? L10n.t("credential.fallback.apiKey")))
         } else if let error = account.lastError, !error.isEmpty {
-            errorSummary = "同步失败：\(error)"
+            errorSummary = L10n.f("app.b3c04fc986", L10n.t(error))
         } else if balances.contains(where: { $0.isAvailable == false }) {
-            errorSummary = "官方标记余额不可用"
+            errorSummary = L10n.t("core.floatingSummary.5996a78e9c")
         }
 
         let accountAlerts = alerts.filter { $0.accountId == account.id && !$0.acknowledged }

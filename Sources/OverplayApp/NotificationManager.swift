@@ -45,7 +45,7 @@ final class NotificationManager: ObservableObject {
         for event in events.prefix(5) {
             _ = await post(
                 title: "\(event.kind.title) · \(event.accountName)",
-                body: "当前 \(event.value)，阈值 \(event.threshold)。\(event.metric)"
+                body: L10n.f("notification.1afa529f8c", event.value, event.threshold, AlertMetricText.localized(event.metric))
             )
         }
     }

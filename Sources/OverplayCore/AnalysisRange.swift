@@ -16,14 +16,14 @@ public enum AnalysisRangePreset: String, CaseIterable, Identifiable, Sendable {
 
     public var label: String {
         switch self {
-        case .today: return "今天"
-        case .thisWeek: return "本周"
-        case .thisMonth: return "本月"
-        case .thisYear: return "今年"
-        case .last7Days: return "近 7 天"
-        case .last30Days: return "近 30 天"
-        case .last90Days: return "近 90 天"
-        case .custom: return "自定义"
+        case .today: return L10n.t("core.messages.17e83cc25e")
+        case .thisWeek: return L10n.t("core.analysisRange.e16e8248b1")
+        case .thisMonth: return L10n.t("core.analysisRange.389f0007de")
+        case .thisYear: return L10n.t("core.analysisRange.fe9ea3f070")
+        case .last7Days: return L10n.t("core.messages.f297b996de")
+        case .last30Days: return L10n.t("core.messages.00a0a58be6")
+        case .last90Days: return L10n.t("core.analysisRange.0e9926eb9f")
+        case .custom: return L10n.t("core.analysisRange.c493338e8c")
         }
     }
 
@@ -46,9 +46,9 @@ public enum AnalysisRangeError: Error, Equatable, Sendable {
     public var message: String {
         switch self {
         case .startAfterEnd:
-            return "开始时间不能晚于结束时间"
+            return L10n.t("core.analysisRange.a8b8c65156")
         case .exceedsRetention(let days):
-            return "自定义区间超出本地 \(days) 天保留期"
+            return L10n.f("core.analysisRange.b9fcf93ab9", days)
         }
     }
 }
@@ -81,7 +81,7 @@ public struct AnalysisRange: Equatable, Sendable {
     public var label: String {
         if isCustom {
             let formatter = Self.customFormatter
-            return "\(formatter.string(from: start)) 至 \(formatter.string(from: end))（本机时区）"
+            return L10n.f("core.analysisRange.6f205ed137", formatter.string(from: start), formatter.string(from: end))
         }
         return "\(preset.label) · \(dayRange.label)"
     }
@@ -187,7 +187,7 @@ public struct AnalysisRange: Equatable, Sendable {
 
     private static var customFormatter: DateFormatter {
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.locale = LocalizationStore.shared.currentLocale
         formatter.dateFormat = "MM-dd HH:mm"
         formatter.timeZone = .current
         return formatter
@@ -208,12 +208,12 @@ public enum AnalysisGranularity: String, CaseIterable, Identifiable, Sendable {
 
     public var label: String {
         switch self {
-        case .automatic: return "自动"
-        case .minute: return "分"
-        case .hour: return "时"
-        case .day: return "日"
-        case .month: return "月"
-        case .year: return "年"
+        case .automatic: return L10n.t("core.analysisRange.4afad87755")
+        case .minute: return L10n.t("core.analysisRange.0d7416e2e2")
+        case .hour: return L10n.t("core.analysisRange.a34801ad9c")
+        case .day: return L10n.t("core.analysisRange.15917f3b32")
+        case .month: return L10n.t("core.analysisRange.d9b59879f3")
+        case .year: return L10n.t("core.analysisRange.6f14c2641c")
         }
     }
 }
@@ -407,7 +407,7 @@ public enum ProviderAnalysisMetrics {
     }
 
     public static func coverageLabel(_ coverage: TokenCoverage) -> String {
-        "\(coverage.accountsWithTokens) / \(coverage.totalAccounts) 个账户提供 token 数据"
+        L10n.f("core.analysisRange.11c2deb1a7", coverage.accountsWithTokens, coverage.totalAccounts)
     }
 }
 
@@ -423,8 +423,8 @@ public enum UsageMetric: String, CaseIterable, Identifiable, Sendable {
     public var label: String {
         switch self {
         case .tokens: return "Token"
-        case .cost: return "费用"
-        case .requests: return "请求数"
+        case .cost: return L10n.t("metric.cost")
+        case .requests: return L10n.t("core.analysisRange.b28376ff80")
         }
     }
 }

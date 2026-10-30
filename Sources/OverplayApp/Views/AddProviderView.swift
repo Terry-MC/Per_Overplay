@@ -50,9 +50,13 @@ struct AddProviderView: View {
             lastPublicSignature = publicSignature
             lastConnectionSignature = connectionSignature
             openDebugAlertSheetIfNeeded()
+            openDebugEditIfNeeded()
         }
         .onChange(of: model.debugAlertLineAccountId) { _, _ in
             openDebugAlertSheetIfNeeded()
+        }
+        .onChange(of: model.debugEditAccountId) { _, _ in
+            openDebugEditIfNeeded()
         }
         .onChange(of: formSignature) { _, _ in
             refreshUnsavedFlag()
@@ -78,16 +82,16 @@ struct AddProviderView: View {
     }
 
     private var publicAlertSection: some View {
-        SectionCard(title: "公共告知线 / 警戒线", isDemo: model.isDemo) {
+        SectionCard(title: L10n.t("addProvider.256a49ee94"), isDemo: model.isDemo) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("公共阈值只影响“跟随公共”的百分比告警线；绝对指标只能自定义。新账户默认关闭告警线。")
+                Text(L10n.t("addProvider.0463694499"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 14) {
-                    labeledField("告知线 %", text: $warningPercent, width: 130, required: true)
-                    labeledField("警戒线 %", text: $criticalPercent, width: 130, required: true)
+                    labeledField(L10n.t("addProvider.915b1d4671"), text: $warningPercent, width: 130, required: true)
+                    labeledField(L10n.t("addProvider.4775c9323b"), text: $criticalPercent, width: 130, required: true)
                     Spacer()
-                    Button("保存公共阈值") { savePublicConfig() }
+                    Button(L10n.t("addProvider.f3b0b7aef7")) { savePublicConfig() }
                         .disabled(model.isDemo || publicConfigError != nil)
                 }
                 if let publicConfigError {
@@ -96,7 +100,7 @@ struct AddProviderView: View {
                         .foregroundStyle(.red)
                 }
                 if model.isDemo {
-                    Text("演示模式不修改真实公共阈值。")
+                    Text(L10n.t("addProvider.2f44438a0e"))
                         .font(.caption2)
                         .foregroundStyle(.orange)
                 }
@@ -106,31 +110,31 @@ struct AddProviderView: View {
 
     private var formSection: some View {
         SectionCard(
-            title: editingAccount == nil ? "新增厂商" : "编辑厂商",
-            subtitle: "真实模式仅保存 DeepSeek / OpenRouter / 通用 HTTP",
+            title: editingAccount == nil ? L10n.t("dashboard.addProvider") : L10n.t("addProvider.f501f28f26"),
+            subtitle: L10n.t("addProvider.a34c8ea0c9"),
             isDemo: model.isDemo
         ) {
             VStack(alignment: .leading, spacing: 14) {
-                Picker("厂商", selection: $provider) {
+                Picker(L10n.t("core.csv.0c131e3964"), selection: $provider) {
                     Text("DeepSeek").tag(ProviderKind.deepseek)
                     Text("OpenRouter").tag(ProviderKind.openrouter)
-                    Text("通用 HTTP").tag(ProviderKind.genericHTTP)
+                    Text(L10n.t("provider.genericHTTP.name")).tag(ProviderKind.genericHTTP)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .disabled(editingAccount != nil)
 
-                Text("OpenAI / Anthropic / Azure / Google Vertex / 内部网关等真实组织级连接器仍标记为“暂不支持”，本 Issue 不创建可监控账户。")
+                Text(L10n.t("addProvider.c640421fd7"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: 14) {
-                    labeledField("显示名称（可选）", text: $displayName, width: 220)
-                    labeledField("官方名称（可选）", text: $officialName, width: 200)
+                    labeledField(L10n.t("addProvider.8e759b9280"), text: $displayName, width: 220)
+                    labeledField(L10n.t("addProvider.b0fb41120b"), text: $officialName, width: 200)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("图标（可选）").font(.caption).foregroundStyle(.secondary)
-                        Picker("图标", selection: $iconName) {
-                            Text("默认（厂商图标）").tag("")
+                        Text(L10n.t("addProvider.55e34a70b1")).font(.caption).foregroundStyle(.secondary)
+                        Picker(L10n.t("addProvider.1f24c1e5aa"), selection: $iconName) {
+                            Text(L10n.t("addProvider.74812bf1e2")).tag("")
                             ForEach(iconOptions, id: \.self) { name in
                                 Label(name, systemImage: name).tag(name)
                             }
@@ -143,10 +147,10 @@ struct AddProviderView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 4) {
-                        Text("API Key / Management Key（仅写入 Keychain）")
+                        Text(L10n.t("addProvider.fe7e771d82"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text("必填")
+                        Text(L10n.t("addProvider.32945d3e36"))
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.red)
                     }
@@ -160,7 +164,7 @@ struct AddProviderView: View {
                             if isTesting {
                                 ProgressView().controlSize(.small)
                             } else {
-                                Label("测试连接", systemImage: "bolt.horizontal.circle")
+                                Label(L10n.t("addProvider.10b7d8eccc"), systemImage: "bolt.horizontal.circle")
                             }
                         }
                         .disabled(
@@ -168,13 +172,13 @@ struct AddProviderView: View {
                         )
                     }
                     if apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text("请输入 Key 后点击“测试连接”；测试成功后才能保存新账户。")
+                        Text(L10n.t("addProvider.1be0f4f3e9"))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
                 if model.isDemo {
-                    Text("演示模式只模拟连接测试，不发起网络请求、不写 Keychain、不保存账户。")
+                    Text(L10n.t("addProvider.1801f70f4e"))
                         .font(.caption2)
                         .foregroundStyle(.orange)
                 }
@@ -192,7 +196,7 @@ struct AddProviderView: View {
                     InlineErrorView(message: formError)
                 }
 
-                Text("必填：API Key / Management Key；通用 HTTP 另需 Base URL 与至少一个映射字段。可选：显示名称、官方名称、图标、告警线。")
+                Text(L10n.t("addProvider.937391fd7d"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 if let reason = saveDisabledReason, !isSaving {
@@ -202,7 +206,7 @@ struct AddProviderView: View {
                 }
                 if !missingRequirements.isEmpty, !isSaving {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("保存前还需完成：")
+                        Text(L10n.t("addProvider.f949a784d6"))
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.secondary)
                         ForEach(missingRequirements, id: \.self) { item in
@@ -213,19 +217,19 @@ struct AddProviderView: View {
                     }
                 }
                 HStack {
-                    Text("新增账户须连接测试成功后才能保存；编辑名称 / 图标可直接保存，修改通用 HTTP 端点或认证须重新测试。")
+                    Text(L10n.t("addProvider.5af73c60a1"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     Spacer()
                     if editingAccount != nil {
-                        Button("取消编辑") { resetForm() }
+                        Button(L10n.t("addProvider.c698df948d")) { resetForm() }
                     }
-                    Button("清空") { resetForm() }
+                    Button(L10n.t("addProvider.84fcd70d42")) { resetForm() }
                     Button {
                         save()
                     } label: {
                         if isSaving { ProgressView().controlSize(.small) }
-                        Text(editingAccount == nil ? "保存并开始监控" : "保存修改")
+                        Text(editingAccount == nil ? L10n.t("addProvider.2e1d532a2e") : L10n.t("addProvider.60b4ae9082"))
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(saveDisabledReason != nil || isSaving)
@@ -237,44 +241,44 @@ struct AddProviderView: View {
     private var genericHTTPFields: some View {
         VStack(alignment: .leading, spacing: 10) {
             Divider()
-            Text("通用 HTTP（单一 HTTPS 只读 GET 端点）").font(.headline)
+            Text(L10n.t("addProvider.e41e08ff76")).font(.headline)
             HStack(spacing: 12) {
                 labeledField("Base URL", text: $baseURL, width: 300, required: true)
-                labeledField("端点路径", text: $endpointPath, width: 160, required: true)
-                Picker("认证", selection: $authMode) {
+                labeledField(L10n.t("addProvider.e3a2fc0649"), text: $endpointPath, width: 160, required: true)
+                Picker(L10n.t("addProvider.32c808cbe5"), selection: $authMode) {
                     ForEach(GenericAuthMode.allCases) { mode in
                         Text(mode.label).tag(mode)
                     }
                 }
                 .frame(width: 190)
                 if authMode == .header {
-                    labeledField("Header 名称", text: $headerName, width: 150, required: true)
+                    labeledField(L10n.t("addProvider.0003b78466"), text: $headerName, width: 150, required: true)
                 }
             }
             DisclosureGroup {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 8)], spacing: 8) {
-                    mappingField("余额 total", text: $mapping.balanceTotal)
-                    mappingField("余额币种", text: $mapping.balanceCurrency)
-                    mappingField("赠送余额", text: $mapping.balanceGranted)
-                    mappingField("充值余额", text: $mapping.balanceToppedUp)
-                    mappingField("额度 total", text: $mapping.creditsTotal)
-                    mappingField("额度 used", text: $mapping.creditsUsed)
-                    mappingField("额度币种", text: $mapping.creditsCurrency)
-                    mappingField("用量日期", text: $mapping.usageDay)
+                    mappingField(L10n.t("addProvider.826ac2fd3e"), text: $mapping.balanceTotal)
+                    mappingField(L10n.t("addProvider.69c3705939"), text: $mapping.balanceCurrency)
+                    mappingField(L10n.t("addProvider.c4d715ed2e"), text: $mapping.balanceGranted)
+                    mappingField(L10n.t("addProvider.b237b1d2b8"), text: $mapping.balanceToppedUp)
+                    mappingField(L10n.t("addProvider.4954023e67"), text: $mapping.creditsTotal)
+                    mappingField(L10n.t("addProvider.a76f5f2fb2"), text: $mapping.creditsUsed)
+                    mappingField(L10n.t("addProvider.cf7635f4ac"), text: $mapping.creditsCurrency)
+                    mappingField(L10n.t("addProvider.6087c62b9d"), text: $mapping.usageDay)
                     mappingField("Prompt tokens", text: $mapping.promptTokens)
                     mappingField("Completion tokens", text: $mapping.completionTokens)
-                    mappingField("请求数", text: $mapping.requests)
-                    mappingField("费用", text: $mapping.cost)
-                    mappingField("用量币种", text: $mapping.usageCurrency)
+                    mappingField(L10n.t("core.analysisRange.b28376ff80"), text: $mapping.requests)
+                    mappingField(L10n.t("metric.cost"), text: $mapping.cost)
+                    mappingField(L10n.t("addProvider.f6fac936dd"), text: $mapping.usageCurrency)
                 }
                 .padding(.top, 6)
-                Text("未映射的指标显示“未配置”，不推断；不支持 OAuth、多端点或数组逐项映射。")
+                Text(L10n.t("addProvider.9879e9c1ac"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             } label: {
                 HStack(spacing: 6) {
-                    Text("JSON 字段映射（点号路径）")
-                    Text("必填：至少一个")
+                    Text(L10n.t("addProvider.6dfa49e0ca"))
+                    Text(L10n.t("addProvider.3f0e0eea30"))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.red)
                 }
@@ -287,18 +291,18 @@ struct AddProviderView: View {
         VStack(alignment: .leading, spacing: 8) {
             Divider()
             HStack(spacing: 6) {
-                Text("新账户告警线").font(.headline)
-                Text("可选，默认关闭").font(.caption).foregroundStyle(.secondary)
+                Text(L10n.t("addProvider.e6733b3e08")).font(.headline)
+                Text(L10n.t("addProvider.4b7a9ed7f8")).font(.caption).foregroundStyle(.secondary)
             }
             HStack(alignment: .top, spacing: 20) {
                 AlertLineRuleEditor(
-                    title: "告知线",
+                    title: L10n.t("addProvider.35f0803018"),
                     rule: $warningRule,
                     valueText: $warningValue,
                     currency: $warningCurrency
                 )
                 AlertLineRuleEditor(
-                    title: "警戒线",
+                    title: L10n.t("addProvider.8d56556021"),
                     rule: $criticalRule,
                     valueText: $criticalValue,
                     currency: $criticalCurrency
@@ -315,7 +319,7 @@ struct AddProviderView: View {
     private func mappingField(_ title: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.caption2).foregroundStyle(.secondary)
-            TextField("例如 data.balance", text: text)
+            TextField(L10n.t("addProvider.c94c8d5a6c"), text: text)
                 .textFieldStyle(.roundedBorder)
                 .font(.caption)
         }
@@ -331,7 +335,7 @@ struct AddProviderView: View {
             HStack(spacing: 4) {
                 Text(title).font(.caption).foregroundStyle(.secondary)
                 if required {
-                    Text("必填").font(.caption2.weight(.semibold)).foregroundStyle(.red)
+                    Text(L10n.t("addProvider.32945d3e36")).font(.caption2.weight(.semibold)).foregroundStyle(.red)
                 }
             }
             TextField(title, text: text)
@@ -341,10 +345,10 @@ struct AddProviderView: View {
     }
 
     private var accountsSection: some View {
-        SectionCard(title: "已接入厂商", subtitle: "\(model.accounts.count) 个", isDemo: model.isDemo) {
+        SectionCard(title: L10n.t("addProvider.f1f1d49a12"), subtitle: L10n.f("settings.3c12d9513d", model.accounts.count), isDemo: model.isDemo) {
             VStack(alignment: .leading, spacing: 10) {
                 if model.accounts.isEmpty {
-                    Text("尚未添加账户。")
+                    Text(L10n.t("settings.4a6f4b687d"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 } else {
@@ -356,13 +360,13 @@ struct AddProviderView: View {
                                     Text(account.displayName).font(.subheadline.weight(.semibold))
                                     if model.isDemo || account.isDemo { DemoTag() }
                                     if account.alertConfig != nil {
-                                        Text("告警线已配置").font(.caption2).foregroundStyle(.blue)
+                                        Text(L10n.t("addProvider.8dee2d6c0e")).font(.caption2).foregroundStyle(.blue)
                                     }
                                 }
                                 Text(
                                     [
                                         account.provider.displayName,
-                                        account.officialName.map { "官方 \($0)" },
+                                        account.officialName.map { L10n.f("settings.cf2ff9d62a", $0) },
                                         account.capabilities.summary
                                     ].compactMap { $0 }.joined(separator: " · ")
                                 )
@@ -370,12 +374,12 @@ struct AddProviderView: View {
                                 .foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Button("告警线") {
+                            Button(L10n.t("metric.alertLine")) {
                                 editingAlertConfig = account.alertConfig ?? legacyAlertConfig(for: account)
                                 alertAccount = account
                             }
                             .disabled(model.isDemo)
-                            Button("编辑") {
+                            Button(L10n.t("common.edit")) {
                                 if account.provider == .genericHTTP {
                                     startEditing(account)
                                 } else {
@@ -383,7 +387,7 @@ struct AddProviderView: View {
                                 }
                             }
                             .disabled(model.isDemo)
-                            Button("删除") { onDelete(account) }
+                            Button(L10n.t("common.delete")) { onDelete(account) }
                                 .disabled(model.isDemo)
                         }
                         if account.id != model.accounts.last?.id { Divider() }
@@ -411,12 +415,12 @@ struct AddProviderView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(result.message).font(.callout).textSelection(.enabled)
                 if let capabilities = result.capabilities {
-                    Text("能力：\(capabilities.summary)")
+                    Text(L10n.f("addProvider.b288ee97ca", capabilities.summary))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 if let retryAfter = result.retryAfter {
-                    Text("建议 \(Int(retryAfter.rounded())) 秒后重试")
+                    Text(L10n.f("addProvider.316e324035", Int(retryAfter.rounded())))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -447,7 +451,7 @@ struct AddProviderView: View {
             try? await Task.sleep(nanoseconds: 250_000_000)
             testResult = ConnectionTestResult(
                 category: .success,
-                message: "演示模式：模拟连接成功；未联网、未写 Keychain、未保存账户",
+                message: L10n.t("addProvider.bcb630201d"),
                 capabilities: provider == .genericHTTP ? genericConfig?.capabilities : provider.capabilities
             )
             isTesting = false
@@ -535,6 +539,15 @@ struct AddProviderView: View {
         model.debugAlertLineAccountId = nil
     }
 
+    private func openDebugEditIfNeeded() {
+        guard let accountId = model.debugEditAccountId,
+              let account = model.accounts.first(where: { $0.id == accountId }) else { return }
+        if editingAccount?.id != accountId {
+            startEditing(account)
+        }
+        model.debugEditAccountId = nil
+    }
+
     private func startEditing(_ account: Account) {
         editingAccount = account
         provider = account.provider
@@ -582,11 +595,11 @@ struct AddProviderView: View {
         guard let warning = parseDecimal(warningPercent),
               let critical = parseDecimal(criticalPercent),
               warning >= 0, critical >= 0 else {
-            formError = "公共阈值必须是大于等于 0 的数字（币种、百分号请勿填入）"
+            formError = L10n.t("addProvider.0bd6bc968a")
             return
         }
         guard warning <= critical else {
-            formError = "公共告知线不能高于警戒线"
+            formError = L10n.t("addProvider.c6da5c774d")
             return
         }
         formError = nil
@@ -601,10 +614,10 @@ struct AddProviderView: View {
     private var publicConfigError: String? {
         guard let warning = parseDecimal(warningPercent),
               let critical = parseDecimal(criticalPercent) else {
-            return "公共阈值必须是数字"
+            return L10n.t("addProvider.44185ab68e")
         }
-        guard warning >= 0, critical >= 0 else { return "公共阈值不能为负数" }
-        guard warning <= critical else { return "公共告知线不能高于警戒线" }
+        guard warning >= 0, critical >= 0 else { return L10n.t("addProvider.74bc48018d") }
+        guard warning <= critical else { return L10n.t("addProvider.c6da5c774d") }
         return nil
     }
 
@@ -627,7 +640,7 @@ struct AddProviderView: View {
             let configurationChanged = provider == .genericHTTP
                 && genericConfig != editingAccount.genericConfig
             if (keyChanged || configurationChanged), testResult?.category != .success {
-                items.append("修改 API Key 或通用 HTTP 配置后重新测试连接")
+                items.append(L10n.t("addProvider.f1270c8edc"))
             }
             return items
         }
@@ -635,43 +648,43 @@ struct AddProviderView: View {
             items.append("API Key / Management Key")
         }
         if testResult?.category != .success {
-            items.append("连接测试成功")
+            items.append(L10n.t("addProvider.bfbf35fbdc"))
         }
         if provider == .genericHTTP {
             if baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 items.append("Base URL")
             }
             if !(mapping.hasBalanceMapping || mapping.hasCreditsMapping || mapping.hasUsageMapping) {
-                items.append("至少一个余额 / 额度 / 用量映射字段")
+                items.append(L10n.t("addProvider.80d49eefdd"))
             }
         }
         return items
     }
 
     private var saveDisabledReason: String? {
-        if model.isDemo { return "演示模式不保存账户；请在真实模式中保存并开始监控。" }
+        if model.isDemo { return L10n.t("addProvider.b7eb28ffaf") }
         if let error = alertConfigError() { return error }
         if let editingAccount {
             let keyChanged = !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             let configurationChanged = provider == .genericHTTP
                 && genericConfig != editingAccount.genericConfig
             if (keyChanged || configurationChanged), testResult?.category != .success {
-                return "修改 API Key 或通用 HTTP 配置后，请先重新测试连接成功。"
+                return L10n.t("addProvider.2293d9db95")
             }
             return nil
         }
         if apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "请填写 API Key / Management Key（必填）。"
+            return L10n.t("addProvider.06a25be6f7")
         }
         if testResult?.category != .success {
-            return "请先测试连接，成功后才能保存并开始监控。"
+            return L10n.t("addProvider.014f743be8")
         }
         if provider == .genericHTTP {
             if baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return "请填写 Base URL（必填）。"
+                return L10n.t("addProvider.2a80065f19")
             }
             if !(mapping.hasBalanceMapping || mapping.hasCreditsMapping || mapping.hasUsageMapping) {
-                return "请至少填写一个余额 / 额度 / 用量映射字段。"
+                return L10n.t("addProvider.551f3f0768")
             }
         }
         return nil
@@ -757,21 +770,21 @@ private func alertLineValidationError(
     criticalCurrency: String
 ) -> String? {
     let entries: [(String, AlertLineRule, String, String)] = [
-        ("告知线", warning, warningValue, warningCurrency),
-        ("警戒线", critical, criticalValue, criticalCurrency)
+        (L10n.t("addProvider.35f0803018"), warning, warningValue, warningCurrency),
+        (L10n.t("addProvider.8d56556021"), critical, criticalValue, criticalCurrency)
     ]
     for (title, rule, valueText, currencyText) in entries {
         if rule.mode == .custom {
             guard let value = parseAlertDecimal(valueText), value >= 0 else {
-                return "\(title)必须是大于等于 0 的数字；币种请填在单独的币种框，不要填入 “100 USD” 这类组合文本。"
+                return L10n.f("addProvider.ea5b48a14e", title)
             }
             if rule.metric == .balanceAbsolute,
                currencyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return "\(title)的余额币种不能为空。"
+                return L10n.f("addProvider.06fcc8e0e8", title)
             }
         }
         if rule.mode == .followPublic, !rule.metric.usesPercent {
-            return "\(title)的绝对指标不能跟随公共，请选择自定义。"
+            return L10n.f("addProvider.14195f9d08", title)
         }
     }
     return nil
@@ -787,14 +800,14 @@ struct AlertLineRuleEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title).font(.subheadline.weight(.semibold))
-            Picker("模式", selection: $rule.mode) {
+            Picker(L10n.t("addProvider.ed0eea8f20"), selection: $rule.mode) {
                 ForEach(AlertLineMode.allCases) { mode in
                     Text(mode.label).tag(mode)
                 }
             }
             .frame(width: 140)
             if rule.mode != .off {
-                Picker("指标", selection: $rule.metric) {
+                Picker(L10n.t("providerDetail.1dfc810a7b"), selection: $rule.metric) {
                     ForEach(AlertMetricKind.allCases) { metric in
                         Text(metric.label).tag(metric)
                     }
@@ -802,16 +815,16 @@ struct AlertLineRuleEditor: View {
                 .frame(width: 160)
                 if rule.mode == .custom {
                     HStack(spacing: 6) {
-                        TextField("纯数字，如 80", text: $valueText)
+                        TextField(L10n.t("addProvider.6adebf0e91"), text: $valueText)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 130)
                         if rule.metric == .balanceAbsolute {
                             if currencyOptions.isEmpty {
-                                TextField("币种，如 USD", text: $currency)
+                                TextField(L10n.t("addProvider.4420803f5c"), text: $currency)
                                     .textFieldStyle(.roundedBorder)
                                     .frame(width: 110)
                             } else {
-                                Picker("币种", selection: $currency) {
+                                Picker(L10n.t("core.csv.a81ab5e100"), selection: $currency) {
                                     ForEach(currencyOptions, id: \.self) { option in
                                         Text(option).tag(option)
                                     }
@@ -824,7 +837,7 @@ struct AlertLineRuleEditor: View {
                             }
                         }
                     }
-                    Text("阈值只填数字；币种请使用独立币种框，不要输入 “100 USD”。")
+                    Text(L10n.t("addProvider.97242298d6"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -838,11 +851,11 @@ struct AlertLineRuleEditor: View {
 
     private var sourceHint: String {
         switch rule.mode {
-        case .off: return "关闭：不评估该线"
+        case .off: return L10n.t("addProvider.5efd4d47ea")
         case .followPublic:
-            return rule.metric.usesPercent ? "使用公共百分比阈值" : "绝对指标不能跟随公共，请选择自定义"
+            return rule.metric.usesPercent ? L10n.t("addProvider.424dcac639") : L10n.t("addProvider.b8b447db67")
         case .custom:
-            return "使用自定义阈值"
+            return L10n.t("addProvider.c335424524")
         }
     }
 }
@@ -872,7 +885,7 @@ private struct AlertLineEditorSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("告警线 · \(account.displayName)").font(.title3.weight(.semibold))
+                Text(L10n.f("addProvider.784c71fc2d", account.displayName)).font(.title3.weight(.semibold))
                 Spacer()
                 if model.isDemo { DemoTag() }
             }
@@ -880,20 +893,20 @@ private struct AlertLineEditorSheet: View {
             Divider()
             VStack(alignment: .leading, spacing: 14) {
                 AlertLineRuleEditor(
-                    title: "告知线",
+                    title: L10n.t("addProvider.35f0803018"),
                     rule: $warning,
                     valueText: $warningValue,
                     currency: $warningCurrency,
                     currencyOptions: currencyOptions
                 )
                 AlertLineRuleEditor(
-                    title: "警戒线",
+                    title: L10n.t("addProvider.8d56556021"),
                     rule: $critical,
                     valueText: $criticalValue,
                     currency: $criticalCurrency,
                     currencyOptions: currencyOptions
                 )
-                Text("公共阈值：告知 \(Money.percent(model.settings.publicAlertConfig.warningPercent)) / 警戒 \(Money.percent(model.settings.publicAlertConfig.criticalPercent))。绝对指标只能自定义。")
+                Text(L10n.f("addProvider.00c962f137", Money.percent(model.settings.publicAlertConfig.warningPercent), Money.percent(model.settings.publicAlertConfig.criticalPercent)))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 if account.alertConfig == nil, let legacySummary {
@@ -908,18 +921,18 @@ private struct AlertLineEditorSheet: View {
             .padding(20)
             Divider()
             HStack(spacing: 12) {
-                Button("取消") { dismiss() }
+                Button(L10n.t("common.cancel")) { dismiss() }
                 Spacer()
                 if model.isDemo {
-                    Text("演示模式不可保存告警线。")
+                    Text(L10n.t("addProvider.fec9108615"))
                         .font(.caption)
                         .foregroundStyle(.orange)
                 } else if validationMessage != nil {
-                    Text("请先修正上方校验错误。")
+                    Text(L10n.t("addProvider.6707877e5e"))
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
-                Button("保存") { save() }
+                Button(L10n.t("common.save")) { save() }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.isDemo || validationMessage != nil)
             }
@@ -950,14 +963,14 @@ private struct AlertLineEditorSheet: View {
     private var legacySummary: String? {
         var parts: [String] = []
         if let budget = account.budget {
-            parts.append("预算 \(budget.amount) \(budget.currency)")
+            parts.append(L10n.f("addProvider.e3ab847cbd", budget.amount, budget.currency))
         }
         if let threshold = account.balanceThreshold {
-            parts.append("余额低水位 \(threshold.amount) \(threshold.currency)")
+            parts.append(L10n.f("addProvider.ba0d578b41", threshold.amount, threshold.currency))
         }
         guard !parts.isEmpty else { return nil }
-        return "旧固定阈值：" + parts.joined(separator: "；")
-            + "。保存新告警线后旧预算 / 余额阈值不再单独触发；每条线只能选一个指标，请确认当前预填规则已覆盖你最关心的旧阈值。"
+        return L10n.t("addProvider.419ec83f6c") + parts.joined(separator: L10n.t("common.listSeparator"))
+            + L10n.t("addProvider.e51771b635")
     }
 
     private func save() {

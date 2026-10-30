@@ -10,18 +10,18 @@ struct AnalysisRangeControls: View {
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 6 : 8) {
             HStack(spacing: 10) {
-                Picker("时间范围", selection: $model.rangePreset) {
-                    Section("自然时间") {
+                Picker(L10n.t("range.2be9040878"), selection: $model.rangePreset) {
+                    Section(L10n.t("range.e360e9b947")) {
                         ForEach(AnalysisRangePreset.allCases.filter(\.isNatural)) { preset in
                             Text(preset.label).tag(preset)
                         }
                     }
-                    Section("滚动窗口") {
+                    Section(L10n.t("range.f4ad4453d0")) {
                         ForEach([AnalysisRangePreset.last7Days, .last30Days, .last90Days]) { preset in
                             Text(preset.label).tag(preset)
                         }
                     }
-                    Section("自定义") {
+                    Section(L10n.t("core.analysisRange.c493338e8c")) {
                         Text(AnalysisRangePreset.custom.label).tag(AnalysisRangePreset.custom)
                     }
                 }
@@ -30,7 +30,7 @@ struct AnalysisRangeControls: View {
                 .labelsHidden()
 
                 if showsGranularity {
-                    Picker("粒度", selection: granularityBinding) {
+                    Picker(L10n.t("range.baf051c677"), selection: granularityBinding) {
                         ForEach(granularities) { granularity in
                             Text(granularity.label).tag(granularity)
                         }
@@ -51,16 +51,16 @@ struct AnalysisRangeControls: View {
             if model.rangePreset == .custom {
                 HStack(spacing: 8) {
                     DatePicker(
-                        "开始",
+                        L10n.t("range.79cc871ca9"),
                         selection: $model.customRangeStart,
                         displayedComponents: [.date, .hourAndMinute]
                     )
                     .datePickerStyle(.compact)
-                    Text("至")
+                    Text(L10n.t("range.43401e739e"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     DatePicker(
-                        "结束",
+                        L10n.t("range.76b9880829"),
                         selection: $model.customRangeEnd,
                         displayedComponents: [.date, .hourAndMinute]
                     )
@@ -68,7 +68,7 @@ struct AnalysisRangeControls: View {
                 }
                 if let error = model.analysisRangeError {
                     Label(
-                        "\(error.message)；统计暂按近 30 天兜底显示，修正后自动恢复",
+                        L10n.f("range.b0a4820e46", error.message),
                         systemImage: "exclamationmark.triangle.fill"
                     )
                     .font(.caption)
@@ -76,7 +76,7 @@ struct AnalysisRangeControls: View {
                 }
             }
 
-            Text("自然单位按本机时区；厂商用量按 UTC 日桶存储。分钟 / 小时仅用于余额快照等带真实时间戳的数据。")
+            Text(L10n.t("range.2c69f1823f"))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -96,8 +96,8 @@ struct AnalysisRangeControls: View {
 
     private var granularityHelp: String {
         if granularities.contains(.minute) {
-            return "余额快照支持分钟 / 小时；token / 费用仅有日级数据"
+            return L10n.t("range.9c7924ec7d")
         }
-        return "当前数据源仅支持自动 / 日 / 月 / 年粒度，不伪造分钟或小时点"
+        return L10n.t("range.b3511ff1ae")
     }
 }

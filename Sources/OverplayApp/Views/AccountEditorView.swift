@@ -58,7 +58,7 @@ struct AccountEditorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text(isEditing ? "编辑账户" : "添加账户")
+                Text(isEditing ? L10n.t("accountEditor.608f93e8ea") : L10n.t("dashboard.c771c7d8e2"))
                     .font(.title2.weight(.semibold))
                 Spacer()
                 if isEditing { DemoTagIfNeeded(isDemo: model.isDemo) }
@@ -71,8 +71,8 @@ struct AccountEditorView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     if !isEditing {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("厂商").font(.headline)
-                            Picker("厂商", selection: $provider) {
+                            Text(L10n.t("core.csv.0c131e3964")).font(.headline)
+                            Picker(L10n.t("core.csv.0c131e3964"), selection: $provider) {
                                 ForEach(ProviderKind.realAccountProviders) { provider in
                                     Text(provider.displayName).tag(provider)
                                 }
@@ -81,31 +81,31 @@ struct AccountEditorView: View {
                             .labelsHidden()
                         }
                     } else if let editingAccount {
-                        Label("\(editingAccount.provider.displayName) · 账户 \(editingAccount.displayName)", systemImage: "person.crop.circle")
+                        Label(L10n.f("accountEditor.c54feccf51", editingAccount.provider.displayName, editingAccount.displayName), systemImage: "person.crop.circle")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("显示名称").font(.headline)
-                        TextField("例如：主账户", text: $name)
+                        Text(L10n.t("accountEditor.75ae6a8a7d")).font(.headline)
+                        TextField(L10n.t("accountEditor.1ebeee1f0f"), text: $name)
                             .textFieldStyle(.roundedBorder)
-                        Text("留空时使用厂商名称。多个账户可使用不同名称区分。")
+                        Text(L10n.t("accountEditor.1fb78166cb"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
 
                     HStack(alignment: .top, spacing: 14) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("官方名称（可选）").font(.headline)
-                            TextField("例如：OpenRouter 生产组织", text: $officialName)
+                            Text(L10n.t("addProvider.b0fb41120b")).font(.headline)
+                            TextField(L10n.t("accountEditor.eb6ff786e8"), text: $officialName)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 300)
                         }
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("图标").font(.headline)
-                            Picker("图标", selection: $iconName) {
-                                Text("默认（厂商图标）").tag("")
+                            Text(L10n.t("addProvider.1f24c1e5aa")).font(.headline)
+                            Picker(L10n.t("addProvider.1f24c1e5aa"), selection: $iconName) {
+                                Text(L10n.t("addProvider.74812bf1e2")).tag("")
                                 ForEach(AccountIconCatalog.options, id: \.self) { icon in
                                     Label(icon, systemImage: icon).tag(icon)
                                 }
@@ -116,14 +116,14 @@ struct AccountEditorView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(isEditing ? "替换 API Key（可选）" : "API Key")
+                        Text(isEditing ? L10n.t("accountEditor.ef85b26aa9") : "API Key")
                             .font(.headline)
                         SecureField(
-                            isEditing ? "留空则保留现有 Key" : "粘贴 API Key（不会回显）",
+                            isEditing ? L10n.t("accountEditor.74da57609f") : L10n.t("accountEditor.84b09ee560"),
                             text: $apiKey
                         )
                         .textFieldStyle(.roundedBorder)
-                        Text("Key 仅写入 macOS Keychain，不进入 SQLite、日志、CSV 或仓库。")
+                        Text(L10n.t("accountEditor.fe076ab14f"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -136,13 +136,13 @@ struct AccountEditorView: View {
                         } label: {
                             if isTesting {
                                 ProgressView().controlSize(.small)
-                                Text("测试中…")
+                                Text(L10n.t("accountEditor.49562bf14c"))
                             } else {
-                                Label("测试连接", systemImage: "bolt.horizontal.circle")
+                                Label(L10n.t("addProvider.10b7d8eccc"), systemImage: "bolt.horizontal.circle")
                             }
                         }
                         .disabled(isTesting || apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        Text("测试不会保存账户，也不会调用推理接口。")
+                        Text(L10n.t("accountEditor.b66494f6c6"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -160,7 +160,7 @@ struct AccountEditorView: View {
             Divider()
 
             HStack {
-                Button("取消") { dismiss() }
+                Button(L10n.t("common.cancel")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
                 Button {
@@ -169,7 +169,7 @@ struct AccountEditorView: View {
                     if isSaving {
                         ProgressView().controlSize(.small)
                     }
-                    Text(isEditing ? "保存" : "添加并测试")
+                    Text(isEditing ? L10n.t("common.save") : L10n.t("accountEditor.d04dabaa4f"))
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
@@ -193,32 +193,32 @@ struct AccountEditorView: View {
                 case .deepseek:
                     Label("DeepSeek", systemImage: "info.circle")
                         .font(.headline)
-                    Text("使用 DeepSeek 普通 API Key。可读取总余额、赠送余额、充值余额与币种；官方不提供历史 token / 费用接口。")
+                    Text(L10n.t("accountEditor.d54d8d21cf"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                     Link(
-                        "DeepSeek 余额 API 文档",
+                        L10n.t("accountEditor.c55bee1059"),
                         destination: URL(string: "https://api-docs.deepseek.com/zh-cn/api/get-user-balance/")!
                     )
                     .font(.caption)
                 case .openrouter:
                     Label("OpenRouter", systemImage: "info.circle")
                         .font(.headline)
-                    Text("必须使用 Management Key。普通 API Key 无法读取 credits / activity。用量仅覆盖最近约 30 个 UTC 日，活动金额单位为 USD。")
+                    Text(L10n.t("accountEditor.aaa26fa3df"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                    Text("Management Key 具有账户级权限，请仅在可信设备上使用。")
+                    Text(L10n.t("accountEditor.47978e9688"))
                         .font(.caption)
                         .foregroundStyle(.orange)
                     Link(
-                        "OpenRouter Credits / Activity 文档",
+                        L10n.t("accountEditor.2dac9d2cc3"),
                         destination: URL(string: "https://openrouter.ai/docs/api-reference/credits/get-credits")!
                     )
                     .font(.caption)
                 default:
-                    Label("演示平台", systemImage: "info.circle")
+                    Label(L10n.t("accountEditor.357a15eebb"), systemImage: "info.circle")
                         .font(.headline)
-                    Text("该平台目前仅用于演示虚拟数据，未接入真实连接器，不能在真实模式添加账户。")
+                    Text(L10n.t("accountEditor.34fb350973"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -246,12 +246,12 @@ struct AccountEditorView: View {
                     .font(.callout)
                     .textSelection(.enabled)
                 if let capabilities = result.capabilities {
-                    Text("能力：\(capabilities.summary)")
+                    Text(L10n.f("addProvider.b288ee97ca", capabilities.summary))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 if let retryAfter = result.retryAfter {
-                    Text("建议 \(Int(retryAfter.rounded())) 秒后重试")
+                    Text(L10n.f("addProvider.316e324035", Int(retryAfter.rounded())))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

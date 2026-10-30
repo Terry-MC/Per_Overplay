@@ -29,15 +29,15 @@ extension DataStatus {
         case .actual:
             return value
         case .missing:
-            return "\(emptyLabel)，原因：\(reason)"
+            return L10n.f("dataStatus.62f940ca77", emptyLabel, reason)
         case .unavailable:
-            return "不可用，原因：\(reason)"
+            return L10n.f("dataStatus.7735628159", reason)
         case .partial:
-            return "暂无完整数据，原因：\(reason)"
+            return L10n.f("dataStatus.65db594bd5", reason)
         case .failed:
-            return "同步失败，原因：\(reason)"
+            return L10n.f("dataStatus.bc6c674c1a", reason)
         case .anomaly:
-            return "数据异常，原因：\(reason)"
+            return L10n.f("dataStatus.f786077ecf", reason)
         }
     }
 }

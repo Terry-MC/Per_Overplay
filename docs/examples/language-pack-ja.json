@@ -1,0 +1,24 @@
+{
+  "formatVersion": 1,
+  "locale": "ja",
+  "displayName": "日本語",
+  "fallbackLocale": "zh-Hans",
+  "appVersionRange": ">=1.0 <2.0",
+  "strings": {
+    "overplay.title": "Overplay",
+    "common.cancel": "キャンセル",
+    "common.save": "保存",
+    "common.delete": "削除",
+    "common.edit": "編集",
+    "common.close": "閉じる",
+    "dashboard.overview": "概要",
+    "dashboard.usage": "使用量",
+    "dashboard.quota": "枠と予算",
+    "dashboard.addProvider": "プロバイダー追加",
+    "dashboard.settings": "設定",
+    "settings.language.title": "言語",
+    "settings.a69e4d32ff": "更新と通知",
+    "alert.budgetWarning.title": "予算が 80% に到達",
+    "alert.budgetExceeded.title": "予算を使い切りました"
+  }
+}

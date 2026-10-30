@@ -73,19 +73,19 @@ struct ProviderDetailView: View {
                     Text(account.displayName)
                         .font(.title3.weight(.semibold))
                     if model.isDemo || account.isDemo { DemoTag() }
-                    if organizationTag { DetailTag(text: "组织级", color: .blue) }
-                    if !account.enabled { DetailTag(text: "已禁用", color: .secondary) }
+                    if organizationTag { DetailTag(text: L10n.t("providerDetail.9e4000b2b7"), color: .blue) }
+                    if !account.enabled { DetailTag(text: L10n.t("health.disabled"), color: .secondary) }
                 }
                 Text(
                     [
                         account.provider.displayName,
-                        account.officialName.map { "官方 \($0)" },
+                        account.officialName.map { L10n.f("settings.cf2ff9d62a", $0) },
                         model.capabilitySummary(for: account)
                     ].compactMap { $0 }.joined(separator: " · ")
                 )
                 .font(.caption)
                 .foregroundStyle(account.credentialInvalid ? .red : .secondary)
-                Text("数据来源：\(sourceDescription) · 最近成功 \(lastSuccessText)")
+                Text(L10n.f("providerDetail.2fa6817f01", sourceDescription, lastSuccessText))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -97,15 +97,15 @@ struct ProviderDetailView: View {
                 if model.isSyncing(account) {
                     ProgressView().controlSize(.small)
                 } else {
-                    Label("刷新", systemImage: "arrow.clockwise")
+                    Label(L10n.t("providerDetail.38108eaa1d"), systemImage: "arrow.clockwise")
                 }
             }
             .disabled(
                 model.isDemo || !account.enabled || model.isSyncing(account)
                     || model.isRefreshCoolingDown(account)
             )
-            .help(model.refreshBlockedReason(for: account) ?? "立即刷新该账户")
-            Button("关闭") { dismiss() }
+            .help(model.refreshBlockedReason(for: account).map(L10n.t) ?? L10n.t("providerDetail.03e03ba84f"))
+            Button(L10n.t("common.close")) { dismiss() }
                 .keyboardShortcut(.cancelAction)
         }
         .padding(20)
@@ -113,17 +113,17 @@ struct ProviderDetailView: View {
     }
 
     private var sourceDescription: String {
-        if account.provider == .deepseek { return "DeepSeek 官方余额快照（非逐请求 token）" }
-        if account.provider == .openrouter { return "OpenRouter activity（约 30 天 UTC 日桶）" }
+        if account.provider == .deepseek { return L10n.t("providerDetail.1b392ce08e") }
+        if account.provider == .openrouter { return L10n.t("providerDetail.0a3540c180") }
         if account.provider == .genericHTTP {
-            return "通用 HTTP · GET \(account.genericConfig?.endpointPath ?? "/")"
+            return L10n.f("core.genericHTTP.9ab64c049d", account.genericConfig?.endpointPath ?? "/")
         }
-        if account.isDemo || model.isDemo { return "演示数据（不联网）" }
-        return "\(account.provider.displayName) 官方只读接口"
+        if account.isDemo || model.isDemo { return L10n.t("providerDetail.8f24f04bfc") }
+        return L10n.f("providerDetail.de16fb12da", account.provider.displayName)
     }
 
     private var lastSuccessText: String {
-        account.lastSuccessAt.map { UIFormat.compactDate($0) } ?? "尚未成功同步"
+        account.lastSuccessAt.map { UIFormat.compactDate($0) } ?? L10n.t("app.52e38de1f4")
     }
 
     @ViewBuilder
@@ -136,27 +136,27 @@ struct ProviderDetailView: View {
     }
 
     private var usageSummary: some View {
-        let costStatus: DataStatus = totals.costAvailable ? .actual : .missing("厂商未提供费用字段")
-        let tokenStatus: DataStatus = totals.tokensAvailable ? .actual : .missing("厂商未提供 token 字段")
-        let requestStatus: DataStatus = totals.requestsAvailable ? .actual : .missing("厂商未提供请求数字段")
+        let costStatus: DataStatus = totals.costAvailable ? .actual : .missing(L10n.t("providerDetail.dc841f4746"))
+        let tokenStatus: DataStatus = totals.tokensAvailable ? .actual : .missing(L10n.t("providerDetail.914fce6f29"))
+        let requestStatus: DataStatus = totals.requestsAvailable ? .actual : .missing(L10n.t("providerDetail.a8e8d095a4"))
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 14) {
                 DetailMetric(title: "Token", value: totals.tokensAvailable
                     ? "\(Money.formatCompactInteger(totals.totalTokens))"
-                    : "厂商未提供", status: tokenStatus)
-                DetailMetric(title: "费用", value: totals.costAvailable
+                    : L10n.t("providerDetail.567cdafa2a"), status: tokenStatus)
+                DetailMetric(title: L10n.t("metric.cost"), value: totals.costAvailable
                     ? UIFormat.costLines(totals.costs).map(\.0).joined(separator: " · ")
-                    : "厂商未提供", status: costStatus)
-                DetailMetric(title: "请求数", value: totals.requestsAvailable
+                    : L10n.t("providerDetail.567cdafa2a"), status: costStatus)
+                DetailMetric(title: L10n.t("core.analysisRange.b28376ff80"), value: totals.requestsAvailable
                     ? Money.formatCompactInteger(totals.requests)
-                    : "厂商未提供", status: requestStatus)
+                    : L10n.t("providerDetail.567cdafa2a"), status: requestStatus)
                 Spacer()
             }
             HStack(spacing: 14) {
-                Text("Prompt \(totals.tokensAvailable ? Money.formatCompactInteger(totals.promptTokens) : "未提供")")
-                Text("Completion \(totals.tokensAvailable ? Money.formatCompactInteger(totals.completionTokens) : "未提供")")
-                Text("Reasoning \(totals.tokensAvailable ? Money.formatCompactInteger(totals.reasoningTokens) : "未提供")")
-                Text("Cached \(totals.tokensAvailable ? Money.formatCompactInteger(totals.cachedTokens) : "未提供")")
+                Text("Prompt \(totals.tokensAvailable ? Money.formatCompactInteger(totals.promptTokens) : L10n.t("core.csv.071fb244ea"))")
+                Text("Completion \(totals.tokensAvailable ? Money.formatCompactInteger(totals.completionTokens) : L10n.t("core.csv.071fb244ea"))")
+                Text("Reasoning \(totals.tokensAvailable ? Money.formatCompactInteger(totals.reasoningTokens) : L10n.t("core.csv.071fb244ea"))")
+                Text("Cached \(totals.tokensAvailable ? Money.formatCompactInteger(totals.cachedTokens) : L10n.t("core.csv.071fb244ea"))")
                 if byokTotal > 0 {
                     Text("BYOK \(Money.formatCost(byokTotal, currency: usageCurrency ?? account.provider.defaultCurrency))")
                 }
@@ -166,7 +166,7 @@ struct ProviderDetailView: View {
             if let quota = model.latestQuota(for: account) {
                 let status = model.creditDataStatus(for: account)
                 HStack(spacing: 8) {
-                    Text("官方 credits 剩余")
+                    Text(L10n.t("providerDetail.281dbbb3e2"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     DataValueLabel(
@@ -175,18 +175,18 @@ struct ProviderDetailView: View {
                         font: .caption.weight(.semibold)
                     )
                     if status.isActual, let percent = quota.usagePercent {
-                        Text("官方额度使用率 \(Money.percent(percent))（BYOK 与 credits 分开）")
+                        Text(L10n.f("providerDetail.30f846184a", Money.percent(percent)))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
             }
             if let history = usageHistory {
-                Text("\(metric.label) 首日 \(formatMetric(history.first)) → 末日 \(formatMetric(history.last)) · 峰值 \(formatMetric(history.peak))")
+                Text(L10n.f("providerDetail.5d423def9b", metric.label, formatMetric(history.first), formatMetric(history.last), formatMetric(history.peak)))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            Text("阶段统计来自当前记录；Reasoning 为 completion 子集、Cached 为 prompt 子集，不重复计入 token 总量。")
+            Text(L10n.t("providerDetail.b7705779fd"))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
@@ -224,28 +224,28 @@ struct ProviderDetailView: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 24) {
                 if balances.isEmpty {
-                    DetailMetric(title: "当前余额", value: "无数据", status: status)
+                    DetailMetric(title: L10n.t("providerDetail.f11215f8f6"), value: L10n.t("dataStatus.6ffa7e6d35"), status: status)
                 }
                 ForEach(balances) { balance in
                     let series = model.balanceChartPoints(for: account, granularity: effectiveGranularity)
                         .filter { $0.currency == balance.currency }
                     DetailMetric(
-                        title: "当前余额 · \(balance.currency)",
+                        title: L10n.f("providerDetail.59a789d878", balance.currency),
                         value: Money.formatBalance(balance.total, currency: balance.currency),
                         status: status
                     )
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("所选范围变化").font(.caption2).foregroundStyle(.secondary)
+                        Text(L10n.t("providerDetail.2accb8e1c8")).font(.caption2).foregroundStyle(.secondary)
                         if let first = series.first, let last = series.last, series.count >= 2 {
                             let delta = last.value - first.value
                             Text("\(delta >= 0 ? "+" : "")\(String(format: "%.2f", delta))")
                                 .font(.callout.weight(.semibold))
                                 .foregroundStyle(delta < 0 ? .orange : .green)
-                            Text("首点 \(String(format: "%.2f", first.value)) → 末点 \(String(format: "%.2f", last.value))")
+                            Text(L10n.f("providerDetail.9ba37104d3", String(format: "%.2f", first.value), String(format: "%.2f", last.value)))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         } else {
-                            Text("至少两次成功同步后显示")
+                            Text(L10n.t("providerDetail.ac6b204e44"))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -254,11 +254,11 @@ struct ProviderDetailView: View {
                 Spacer()
             }
             if let threshold = account.balanceThreshold {
-                Text("本地低水位阈值 \(Money.formatBalance(threshold.amount, currency: threshold.currency))；仅用于告警，不是官方上限。")
+                Text(L10n.f("providerDetail.61708d4a30", Money.formatBalance(threshold.amount, currency: threshold.currency)))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            Text("余额型厂商不提供逐请求 token / 费用历史；本页只绘制真实余额快照，不伪造 token 折线。")
+            Text(L10n.t("providerDetail.5e1d8e9560"))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
@@ -271,11 +271,11 @@ struct ProviderDetailView: View {
         } else if account.capabilities.usage {
             usageChart
         } else {
-            SectionCard(title: "厂商详情", isDemo: model.isDemo) {
+            SectionCard(title: L10n.t("providerDetail.591110d871"), isDemo: model.isDemo) {
                 EmptyStateView(
                     symbol: "eye.slash",
-                    title: "该厂商暂无可用图表",
-                    message: "当前数据源没有提供用量、费用或余额能力；界面不会推断或伪造指标。"
+                    title: L10n.t("providerDetail.bea950ed5b"),
+                    message: L10n.t("providerDetail.26a776e85f")
                 )
             }
         }
@@ -284,29 +284,29 @@ struct ProviderDetailView: View {
     private var balanceChart: some View {
         let points = model.balanceChartPoints(for: account, granularity: effectiveGranularity)
         return SectionCard(
-            title: "余额快照曲线",
-            subtitle: "\(effectiveGranularity.label)粒度 · 非逐请求 token 统计",
+            title: L10n.t("providerDetail.e8d3eb94c4"),
+            subtitle: L10n.f("providerDetail.8634513206", effectiveGranularity.label),
             isDemo: model.isDemo
         ) {
             if points.isEmpty {
-                chartEmpty("所选范围没有余额快照。余额曲线只使用真实同步点，不补 0、不连线伪造。")
+                chartEmpty(L10n.t("providerDetail.ed97af3c13"))
             } else {
                 Chart(points) { point in
                     LineMark(
-                        x: .value("时间", point.date),
-                        y: .value("余额", point.value)
+                        x: .value(L10n.t("messages.89b4aa6364"), point.date),
+                        y: .value(L10n.t("metric.balance"), point.value)
                     )
-                    .foregroundStyle(by: .value("币种", point.currency))
+                    .foregroundStyle(by: .value(L10n.t("core.csv.a81ab5e100"), point.currency))
                     PointMark(
-                        x: .value("时间", point.date),
-                        y: .value("余额", point.value)
+                        x: .value(L10n.t("messages.89b4aa6364"), point.date),
+                        y: .value(L10n.t("metric.balance"), point.value)
                     )
-                    .foregroundStyle(by: .value("币种", point.currency))
+                    .foregroundStyle(by: .value(L10n.t("core.csv.a81ab5e100"), point.currency))
                     .symbolSize(18)
                 }
                 .frame(height: 250)
                 .chartLegend(position: .bottom)
-                Text("每个点来自一次成功同步；切换粒度时每个时间桶保留最后一个快照，不做上采样。")
+                Text(L10n.t("providerDetail.62dfde54ec"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -328,17 +328,17 @@ struct ProviderDetailView: View {
         }()
         let subtitle: String = {
             if metric == .cost {
-                return "\(effectiveGranularity.label)粒度 · \(usageCurrency ?? "无费用币种")"
+                return L10n.f("providerDetail.3a4150af97", effectiveGranularity.label, usageCurrency ?? L10n.t("common.noCostCurrency"))
             }
-            return "\(effectiveGranularity.label)粒度 · \(metric.label)"
+            return L10n.f("providerDetail.3a4150af97", effectiveGranularity.label, metric.label)
         }()
         return SectionCard(
-            title: "按时间趋势",
+            title: L10n.t("providerDetail.fffa79c0de"),
             subtitle: subtitle,
             isDemo: model.isDemo
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                Picker("指标", selection: $metric) {
+                Picker(L10n.t("providerDetail.1dfc810a7b"), selection: $metric) {
                     ForEach(UsageMetric.allCases) { item in
                         Text(item.label).tag(item)
                     }
@@ -347,23 +347,23 @@ struct ProviderDetailView: View {
                 .frame(width: 260)
 
                 if !metricAvailable {
-                    chartEmpty("厂商未提供\(metric.label)字段。缺失数据不显示为 0，也不伪造曲线。")
+                    chartEmpty(L10n.f("providerDetail.aa709830af", metric.label))
                 } else if segments.isEmpty {
-                    chartEmpty("所选范围没有可绘制的\(metric.label)数据；缺失日期保持空白。")
+                    chartEmpty(L10n.f("providerDetail.8c803e652f", metric.label))
                 } else {
                     Chart {
                         ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
                             ForEach(segment) { point in
                                 LineMark(
-                                    x: .value("时间", chartDate(point.key)),
+                                    x: .value(L10n.t("messages.89b4aa6364"), chartDate(point.key)),
                                     y: .value(metric.label, point.value)
                                 )
-                                .foregroundStyle(by: .value("分段", "\(index)"))
+                                .foregroundStyle(by: .value(L10n.t("providerDetail.21ce5adddf"), "\(index)"))
                                 PointMark(
-                                    x: .value("时间", chartDate(point.key)),
+                                    x: .value(L10n.t("messages.89b4aa6364"), chartDate(point.key)),
                                     y: .value(metric.label, point.value)
                                 )
-                                .foregroundStyle(by: .value("分段", "\(index)"))
+                                .foregroundStyle(by: .value(L10n.t("providerDetail.21ce5adddf"), "\(index)"))
                                 .symbolSize(10)
                             }
                         }
@@ -392,7 +392,7 @@ struct ProviderDetailView: View {
                         .foregroundStyle(.secondary)
                 }
                 if account.provider == .openrouter && daysInRange > 30 {
-                    Label("OpenRouter 仅提供约 30 个 UTC 日窗口；超出部分留空，不补 0。", systemImage: "clock.badge.exclamationmark")
+                    Label(L10n.t("providerDetail.4df99aa7e5"), systemImage: "clock.badge.exclamationmark")
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
@@ -437,20 +437,20 @@ struct ProviderDetailView: View {
 
     private func chartFootnote(segments: [[UsageChartPoint]]) -> String {
         var parts = [
-            "来源：\(sourceDescription)",
-            "数据点按厂商实际记录绘制"
+            L10n.f("providerDetail.9c7669354e", sourceDescription),
+            L10n.t("providerDetail.eb4432e51a")
         ]
         if segments.count > 1 {
-            parts.append("缺失日期已断开折线（\(segments.count) 段），未补 0")
+            parts.append(L10n.f("providerDetail.435d9ce718", segments.count))
         }
         if effectiveGranularity == .month || effectiveGranularity == .year {
-            parts.append("由日级记录聚合")
+            parts.append(L10n.t("providerDetail.1bfc90969d"))
         }
         if effectiveGranularity == .automatic {
-            parts.append("自动使用日级数据")
+            parts.append(L10n.t("providerDetail.41ed155ea7"))
         }
         if !granularities.contains(.minute) && !granularities.contains(.hour) {
-            parts.append("厂商未提供分钟 / 小时粒度")
+            parts.append(L10n.t("providerDetail.3828196d0c"))
         }
         return parts.joined(separator: " · ")
     }
@@ -480,11 +480,11 @@ struct ProviderDetailView: View {
                 Text(note).font(.caption).foregroundStyle(.secondary)
             }
             if model.isStale(account) {
-                Text("当前数据已过期，图表保留最近一次有效同步；不会把旧值当作实时数据。")
+                Text(L10n.t("providerDetail.90492437a5"))
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
-            Text("时间范围与筛选在主窗口各分析页共享；打开详情、切换范围或指标不会发起网络请求。")
+            Text(L10n.t("providerDetail.5430d3d8b6"))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
@@ -492,21 +492,21 @@ struct ProviderDetailView: View {
 
     private var capabilityNote: String? {
         if account.provider == .deepseek {
-            return "DeepSeek：官方仅提供余额，不提供历史 token / 费用；余额快照粒度可切换。"
+            return L10n.t("providerDetail.9103c919e3")
         }
         if account.provider == .openrouter {
-            return "OpenRouter：用量窗口约 30 天（UTC 日桶）；BYOK 与 credits 分开统计；官方无余额。"
+            return L10n.t("providerDetail.9e1102f0a0")
         }
         if account.provider == .genericHTTP {
-            return "通用 HTTP：仅展示已映射并在响应中命中的字段；未配置指标不推断。"
+            return L10n.t("providerDetail.44c4a8ebd3")
         }
         if account.provider == .gemini {
-            return "Gemini：真实 AI Studio 接口不提供逐 Key 用量 / 费用；本页演示平台数据仅用于功能展示。未配置指标不推断。"
+            return L10n.t("providerDetail.83319110e4")
         }
         if account.isDemo || model.isDemo {
-            return "演示平台：数据为本地模拟，不联网、不读写 Keychain；不代表真实厂商能力。"
+            return L10n.t("providerDetail.b57d32e387")
         }
-        return "仅展示厂商实际提供并已同步的指标；未提供字段不会显示 0。"
+        return L10n.t("providerDetail.a510611baa")
     }
 }
 

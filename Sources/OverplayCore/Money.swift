@@ -19,7 +19,7 @@ public enum Money {
         maximumFractionDigits: Int = 6
     ) -> String {
         let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.locale = LocalizationStore.shared.currentLocale
         formatter.numberStyle = .decimal
         formatter.usesGroupingSeparator = true
         formatter.minimumFractionDigits = minimumFractionDigits
@@ -43,7 +43,7 @@ public enum Money {
 
     public static func formatPlain(_ amount: Decimal, fractionDigits: Int = 2) -> String {
         let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.locale = LocalizationStore.shared.currentLocale
         formatter.numberStyle = .decimal
         formatter.usesGroupingSeparator = true
         formatter.minimumFractionDigits = 0
@@ -54,7 +54,7 @@ public enum Money {
 
     public static func formatInteger(_ value: Int) -> String {
         let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.locale = LocalizationStore.shared.currentLocale
         formatter.numberStyle = .decimal
         formatter.usesGroupingSeparator = true
         return formatter.string(from: NSNumber(value: value)) ?? "\(value)"

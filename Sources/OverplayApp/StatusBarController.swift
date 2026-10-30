@@ -66,7 +66,7 @@ final class StatusBarController: NSObject {
         button.action = #selector(statusItemClicked(_:))
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         button.imagePosition = .imageOnly
-        button.setAccessibilityLabel("Overplay 菜单栏图标")
+        button.setAccessibilityLabel(L10n.t("statusBar.44fd17022a"))
     }
 
     private func configurePopover() {
@@ -115,7 +115,7 @@ final class StatusBarController: NSObject {
         if presentation.showsDemoBadge {
             button.imagePosition = .imageLeading
             button.attributedTitle = NSAttributedString(
-                string: image == nil ? "OV · 演示" : "演示",
+                string: image == nil ? L10n.t("statusBar.a2b46a35e0") : L10n.t("statusBar.b7518ad52f"),
                 attributes: [
                     .foregroundColor: NSColor.labelColor,
                     .font: NSFont.menuBarFont(ofSize: 0)
@@ -156,23 +156,23 @@ final class StatusBarController: NSObject {
         menu.autoenablesItems = false
         if model.isDemo {
             let demoItem = menu.addItem(
-                withTitle: "演示数据 · 不发起网络请求",
+                withTitle: L10n.t("statusBar.d0a25554b0"),
                 action: nil,
                 keyEquivalent: ""
             )
             demoItem.isEnabled = false
             menu.addItem(.separator())
         }
-        menu.addItem(withTitle: "打开悬浮窗", action: #selector(openFloatingWindow), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "打开主窗口", action: #selector(openDashboard), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "打开快捷面板", action: #selector(openQuickPanel), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L10n.t("statusBar.7789c1cdfe"), action: #selector(openFloatingWindow), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L10n.t("statusBar.b833a6eabe"), action: #selector(openDashboard), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L10n.t("statusBar.a0223d7e4f"), action: #selector(openQuickPanel), keyEquivalent: "").target = self
         menu.addItem(.separator())
-        let refreshItem = menu.addItem(withTitle: "刷新全部", action: #selector(refreshAll), keyEquivalent: "")
+        let refreshItem = menu.addItem(withTitle: L10n.t("common.refreshAll"), action: #selector(refreshAll), keyEquivalent: "")
         refreshItem.target = self
         refreshItem.isEnabled = !model.isDemo && !model.accounts.isEmpty
-        menu.addItem(withTitle: "设置…", action: #selector(openSettings), keyEquivalent: "").target = self
+        menu.addItem(withTitle: L10n.t("statusBar.ff9f5134df"), action: #selector(openSettings), keyEquivalent: "").target = self
         menu.addItem(.separator())
-        menu.addItem(withTitle: "退出 Overplay", action: #selector(quitApp), keyEquivalent: "q").target = self
+        menu.addItem(withTitle: L10n.t("statusBar.d94cefe4dc"), action: #selector(quitApp), keyEquivalent: "q").target = self
         menu.popUp(
             positioning: nil,
             at: NSPoint(x: 0, y: button.bounds.height + 4),

@@ -15,8 +15,8 @@ struct QuotaView: View {
             if model.accounts.isEmpty {
                 EmptyStateView(
                     symbol: "gauge.with.dots.needle.50percent",
-                    title: "暂无账户",
-                    message: "添加 DeepSeek 或 OpenRouter 真实账户，或切换到演示模式查看各平台虚拟额度、用量与本地预算。"
+                    title: L10n.t("floating.d125522fc6"),
+                    message: L10n.t("quota.7bf947867e")
                 )
             } else {
                 ForEach(model.accounts) { account in
@@ -80,7 +80,7 @@ struct QuotaView: View {
     private func accountSubtitle(_ account: Account) -> String {
         [
             account.provider.displayName,
-            account.officialName.map { "官方 \($0)" },
+            account.officialName.map { L10n.f("settings.cf2ff9d62a", $0) },
             model.currencyLabel(for: account),
             model.capabilitySummary(for: account)
         ].compactMap { $0 }.joined(separator: " · ")
@@ -107,17 +107,17 @@ struct QuotaView: View {
     @ViewBuilder
     private func deepSeekSection(_ account: Account) -> some View {
         let balances = model.latestBalances(for: account)
-        let status = model.balanceDataStatus(for: account).prefixed("官方余额")
+        let status = model.balanceDataStatus(for: account).prefixed(L10n.t("core.floatingSummary.f5f1ad2311"))
         Divider()
         if balances.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 18) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("官方余额 · \(model.currencyLabel(for: account))")
+                        Text(L10n.f("quota.e0544e29c7", model.currencyLabel(for: account)))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         DataValueLabel(
-                            text: "无数据",
+                            text: L10n.t("dataStatus.6ffa7e6d35"),
                             status: status,
                             font: .system(size: 30, weight: .semibold, design: .rounded)
                         )
@@ -130,7 +130,7 @@ struct QuotaView: View {
             ForEach(balances) { balance in
                 HStack(alignment: .firstTextBaseline, spacing: 18) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("官方余额 · \(balance.currency)")
+                        Text(L10n.f("quota.e0544e29c7", balance.currency))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         DataValueLabel(
@@ -141,20 +141,20 @@ struct QuotaView: View {
                     }
                     VStack(alignment: .leading, spacing: 2) {
                         if let granted = balance.granted {
-                            Text("赠送余额 \(Money.formatBalance(granted, currency: balance.currency))")
+                            Text(L10n.f("quota.6e36924888", Money.formatBalance(granted, currency: balance.currency)))
                         }
                         if let toppedUp = balance.toppedUp {
-                            Text("充值余额 \(Money.formatBalance(toppedUp, currency: balance.currency))")
+                            Text(L10n.f("quota.b930474be4", Money.formatBalance(toppedUp, currency: balance.currency)))
                         }
-                        Text("同步于 \(UIFormat.compactDate(balance.asOf))")
-                        Text("来源：\(balance.source)")
+                        Text(L10n.f("quota.d2b9869a69", UIFormat.compactDate(balance.asOf)))
+                        Text(L10n.f("providerDetail.9c7669354e", balance.source))
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     Spacer()
                     if let isAvailable = balance.isAvailable {
                         Label(
-                            isAvailable ? "官方标记可用" : "官方标记账户异常",
+                            isAvailable ? L10n.t("quota.4115ef85ea") : L10n.t("quota.9d3bed6bbf"),
                             systemImage: isAvailable ? "checkmark.circle" : "exclamationmark.triangle.fill"
                         )
                         .font(.caption)
@@ -175,10 +175,10 @@ struct QuotaView: View {
             .first { $0.currency == currency }?.snapshots ?? []
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("余额快照曲线")
+                Text(L10n.t("providerDetail.e8d3eb94c4"))
                     .font(.subheadline.weight(.semibold))
                 if series.count < 2 {
-                    Text("至少两次成功同步后显示曲线")
+                    Text(L10n.t("quota.256fb6c637"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -186,17 +186,17 @@ struct QuotaView: View {
             if series.count >= 2 {
                 Chart(series) { snapshot in
                     LineMark(
-                        x: .value("时间", snapshot.asOf),
-                        y: .value("余额", NSDecimalNumber(decimal: snapshot.total).doubleValue)
+                        x: .value(L10n.t("messages.89b4aa6364"), snapshot.asOf),
+                        y: .value(L10n.t("metric.balance"), NSDecimalNumber(decimal: snapshot.total).doubleValue)
                     )
                     PointMark(
-                        x: .value("时间", snapshot.asOf),
-                        y: .value("余额", NSDecimalNumber(decimal: snapshot.total).doubleValue)
+                        x: .value(L10n.t("messages.89b4aa6364"), snapshot.asOf),
+                        y: .value(L10n.t("metric.balance"), NSDecimalNumber(decimal: snapshot.total).doubleValue)
                     )
                     .symbolSize(12)
                 }
                 .frame(height: 150)
-                Text("余额快照，非逐请求 token 统计；每个点来自一次成功同步。")
+                Text(L10n.t("quota.2234781b0f"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -211,41 +211,41 @@ struct QuotaView: View {
         let status = model.balanceDataStatus(for: account)
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("余额低水位阈值").font(.subheadline.weight(.semibold))
+                Text(L10n.t("quota.66d3cf61d5")).font(.subheadline.weight(.semibold))
                 if let threshold {
-                    Text("阈值 \(Money.formatBalance(threshold.amount, currency: threshold.currency)) · 仅用于本地告警，不是官方限额")
+                    Text(L10n.f("quota.dcd688e398", Money.formatBalance(threshold.amount, currency: threshold.currency)))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if status.isActual, let relevant {
                         Text(
                             relevant.total < threshold.amount
-                                ? "当前已低于阈值：\(Money.formatBalance(relevant.total, currency: relevant.currency))"
-                                : "当前高于阈值：\(Money.formatBalance(relevant.total, currency: relevant.currency))"
+                                ? L10n.f("quota.56327695e5", Money.formatBalance(relevant.total, currency: relevant.currency))
+                                : L10n.f("quota.c5532e2ff5", Money.formatBalance(relevant.total, currency: relevant.currency))
                         )
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(relevant.total < threshold.amount ? .orange : .green)
                     } else if !status.isActual {
-                        Text("暂不评估阈值：\(status.reason ?? status.emptyLabel)")
+                        Text(L10n.f("quota.a3da00bf3a", status.reason ?? status.emptyLabel))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else if !balances.isEmpty {
-                        Text("该账户当前余额币种为 \(model.currencyLabel(for: account))，请重新设置阈值币种。")
+                        Text(L10n.f("quota.995f4d16f1", model.currencyLabel(for: account)))
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
                 } else {
-                    Text("未设置。阈值跟随账户币种；低于阈值时产生本地告警，回升到阈值以上后才重新布防。")
+                    Text(L10n.t("quota.d41cd7e642"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
             Spacer()
-            Button(threshold == nil ? "设置阈值" : "编辑阈值") {
+            Button(threshold == nil ? L10n.t("quota.21d4e2e365") : L10n.t("quota.e200ee3482")) {
                 thresholdAccount = account
             }
             .disabled(model.isDemo)
             if threshold != nil {
-                Button("清除") {
+                Button(L10n.t("quota.7b15e5e8e7")) {
                     do { try model.clearThreshold(account: account) }
                     catch { model.showBanner(error.localizedDescription, style: .error) }
                 }
@@ -258,13 +258,13 @@ struct QuotaView: View {
     private func openRouterSection(_ account: Account) -> some View {
         Divider()
         let quota = model.latestQuota(for: account)
-        let quotaName = account.provider == .openrouter ? "credits" : "额度"
-        let status = model.creditDataStatus(for: account).prefixed("官方 \(quotaName)")
+        let quotaName = account.provider == .openrouter ? "credits" : L10n.t("menuBar.3fa9a9d38e")
+        let status = model.creditDataStatus(for: account).prefixed(L10n.f("settings.cf2ff9d62a", quotaName))
         if let quota {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 20) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("官方 \(quotaName) 剩余").font(.caption).foregroundStyle(.secondary)
+                        Text(L10n.f("quota.2c976d79ba", quotaName)).font(.caption).foregroundStyle(.secondary)
                         DataValueLabel(
                             text: Money.formatBalance(quota.remaining, currency: quota.currency),
                             status: status,
@@ -272,16 +272,16 @@ struct QuotaView: View {
                         )
                     }
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("总充值 \(Money.formatBalance(quota.totalCredits, currency: quota.currency))")
-                        Text("总使用 \(Money.formatBalance(quota.totalUsage, currency: quota.currency))")
-                        Text("同步于 \(UIFormat.compactDate(quota.asOf))")
+                        Text(L10n.f("quota.7358a6b955", Money.formatBalance(quota.totalCredits, currency: quota.currency)))
+                        Text(L10n.f("quota.fd5c51f3c0", Money.formatBalance(quota.totalUsage, currency: quota.currency)))
+                        Text(L10n.f("quota.d2b9869a69", UIFormat.compactDate(quota.asOf)))
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     Spacer()
                     if status.isActual, let percent = quota.usagePercent {
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text("官方额度使用率").font(.caption).foregroundStyle(.secondary)
+                            Text(L10n.t("quota.9bfba85a1b")).font(.caption).foregroundStyle(.secondary)
                             Text(Money.percent(percent))
                                 .font(.headline)
                                 .foregroundStyle(percent >= Decimal(90) ? .orange : .primary)
@@ -293,7 +293,7 @@ struct QuotaView: View {
                         value: min(max(NSDecimalNumber(decimal: percent).doubleValue / 100.0, 0), 1)
                     )
                     .tint(percent >= 90 ? .orange : .blue)
-                    Text("官方额度（total_credits − total_usage），不是本地预算。")
+                    Text(L10n.t("quota.1074f6570d"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -305,18 +305,18 @@ struct QuotaView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 20) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("官方 \(quotaName) 剩余").font(.caption).foregroundStyle(.secondary)
+                        Text(L10n.f("quota.2c976d79ba", quotaName)).font(.caption).foregroundStyle(.secondary)
                         DataValueLabel(
-                            text: "无数据",
+                            text: L10n.t("dataStatus.6ffa7e6d35"),
                             status: status,
                             font: .system(size: 30, weight: .semibold, design: .rounded)
                         )
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text("官方额度使用率").font(.caption).foregroundStyle(.secondary)
+                        Text(L10n.t("quota.9bfba85a1b")).font(.caption).foregroundStyle(.secondary)
                         DataValueLabel(
-                            text: "无数据",
+                            text: L10n.t("dataStatus.6ffa7e6d35"),
                             status: status,
                             font: .headline
                         )
@@ -339,21 +339,21 @@ struct QuotaView: View {
         let forecast = model.budgetForecast(for: account)
         let month = CalendarDay.monthRange(now: model.now)
         let analysisRange = model.currentRange
-        let spendStatus = model.budgetSpendDataStatus(for: account).prefixed("本月已用")
+        let spendStatus = model.budgetSpendDataStatus(for: account).prefixed(L10n.t("quota.166b33d15f"))
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label("本地预算", systemImage: "target")
+                Label(L10n.t("quota.4cbf7880a6"), systemImage: "target")
                     .font(.subheadline.weight(.semibold))
-                Text("按本机自然月 · 本地预算，不冒充官方额度")
+                Text(L10n.t("quota.96370f99b4"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button(budget == nil ? "设置月度预算" : "编辑预算") {
+                Button(budget == nil ? L10n.t("quota.acc3fd7eee") : L10n.t("quota.d20c8474fe")) {
                     budgetAccount = account
                 }
                 .disabled(model.isDemo)
                 if budget != nil {
-                    Button("清除") {
+                    Button(L10n.t("quota.7b15e5e8e7")) {
                         do { try model.clearBudget(account: account) }
                         catch { model.showBanner(error.localizedDescription, style: .error) }
                     }
@@ -364,17 +364,17 @@ struct QuotaView: View {
                 if let spend {
                     HStack(alignment: .firstTextBaseline, spacing: 18) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("本月已用").font(.caption).foregroundStyle(.secondary)
+                            Text(L10n.t("quota.166b33d15f")).font(.caption).foregroundStyle(.secondary)
                             Text(Money.formatCost(spend, currency: budget.currency))
                                 .font(.title3.weight(.semibold))
                         }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("预算").font(.caption).foregroundStyle(.secondary)
+                            Text(L10n.t("metric.budget")).font(.caption).foregroundStyle(.secondary)
                             Text(Money.formatBalance(budget.amount, currency: budget.currency))
                                 .font(.title3.weight(.semibold))
                         }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text((remaining ?? 0) < 0 ? "超支" : "剩余")
+                            Text((remaining ?? 0) < 0 ? L10n.t("quota.816627f615") : L10n.t("quota.f37c034a97"))
                                 .font(.caption).foregroundStyle(.secondary)
                             Text(
                                 remaining.map { Money.formatBalance(abs($0), currency: budget.currency) } ?? "—"
@@ -385,7 +385,7 @@ struct QuotaView: View {
                         Spacer()
                         if let ratio {
                             VStack(alignment: .trailing, spacing: 2) {
-                                Text("使用率").font(.caption).foregroundStyle(.secondary)
+                                Text(L10n.t("quota.8ca02f90d1")).font(.caption).foregroundStyle(.secondary)
                                 Text(Money.percent(ratio))
                                     .font(.title3.weight(.semibold))
                                     .foregroundStyle(ratio >= 100 ? .red : ratio >= 80 ? .orange : .green)
@@ -396,37 +396,37 @@ struct QuotaView: View {
                         BudgetProgressBar(ratio: ratio, isDemo: model.isDemo)
                     }
                     HStack {
-                        Text("告知线 80% · 警戒线 100%（目标标记）")
+                        Text(L10n.t("quota.4afc9a9265"))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                         Spacer()
                         if let forecast {
-                            Text("预估月末 \(Money.formatBalance(forecast, currency: budget.currency)) · 线性外推，仅供参考")
+                            Text(L10n.f("quota.9f82c4753e", Money.formatBalance(forecast, currency: budget.currency)))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    Text("本月已用按本机自然月 \(month.range.startDay) 至 \(month.range.endDay) 的厂商 UTC 日桶统计，可能不含今天且仅覆盖约 30 天窗口；不完整时不触发预算告警。")
+                    Text(L10n.f("quota.9b8210b7a5", month.range.startDay, month.range.endDay))
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
                     HStack(alignment: .firstTextBaseline, spacing: 18) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("本月已用").font(.caption).foregroundStyle(.secondary)
+                            Text(L10n.t("quota.166b33d15f")).font(.caption).foregroundStyle(.secondary)
                             DataValueLabel(
-                                text: "无数据",
+                                text: L10n.t("dataStatus.6ffa7e6d35"),
                                 status: spendStatus,
                                 font: .title3.weight(.semibold)
                             )
                         }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("预算").font(.caption).foregroundStyle(.secondary)
+                            Text(L10n.t("metric.budget")).font(.caption).foregroundStyle(.secondary)
                             Text(Money.formatBalance(budget.amount, currency: budget.currency))
                                 .font(.title3.weight(.semibold))
                         }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("剩余").font(.caption).foregroundStyle(.secondary)
+                            Text(L10n.t("quota.f37c034a97")).font(.caption).foregroundStyle(.secondary)
                             DataValueLabel(
                                 text: "—",
                                 status: spendStatus,
@@ -435,15 +435,15 @@ struct QuotaView: View {
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text("使用率").font(.caption).foregroundStyle(.secondary)
+                            Text(L10n.t("quota.8ca02f90d1")).font(.caption).foregroundStyle(.secondary)
                             DataValueLabel(
-                                text: "无数据",
+                                text: L10n.t("dataStatus.6ffa7e6d35"),
                                 status: spendStatus,
                                 font: .title3.weight(.semibold)
                             )
                         }
                     }
-                    Text(spendStatus.reason ?? "本月数据不完整，不计算剩余 / 预估，也不触发预算阈值告警。")
+                    Text(spendStatus.reason ?? L10n.t("quota.a2cdc74805"))
                         .font(.caption2)
                         .foregroundStyle(spendStatus.isActual ? Color.secondary : Color.orange)
                         .fixedSize(horizontal: false, vertical: true)
@@ -457,7 +457,7 @@ struct QuotaView: View {
                     month: month
                 )
             } else {
-                Text("未设置预算。设置后可查看使用率与 80% / 100% 告警；预算仅为本机设置。")
+                Text(L10n.t("quota.82ca86054e"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -479,41 +479,41 @@ struct QuotaView: View {
         let selectedCosts = selectedRecords.compactMap(\.cost)
         let selectedStatus: DataStatus
         if account.credentialInvalid {
-            selectedStatus = .failed("凭据失效：\(account.lastError ?? "需要重新输入 API Key")")
+            selectedStatus = .failed(L10n.f("app.29dd8b4768", L10n.t(account.lastError ?? L10n.t("credential.fallback.apiKey"))))
         } else if let error = account.lastError, !error.isEmpty {
-            selectedStatus = .partial("同步失败：\(error)")
+            selectedStatus = .partial(L10n.f("app.b3c04fc986", L10n.t(error)))
         } else if selectedRecords.isEmpty {
-            selectedStatus = .missing("所选分析范围没有该账户的用量记录")
+            selectedStatus = .missing(L10n.t("quota.12a24af6db"))
         } else if selectedCosts.isEmpty {
-            selectedStatus = .missing("所选记录未提供费用字段")
+            selectedStatus = .missing(L10n.t("quota.d8dc076c65"))
         } else {
             selectedStatus = .actual
         }
         let selectedCostText = selectedCosts.isEmpty
-            ? "无数据"
+            ? L10n.t("dataStatus.6ffa7e6d35")
             : Money.formatCost(selectedCosts.reduce(Decimal(0), +), currency: budget.currency)
         return VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 8) {
-                Label("所选分析范围", systemImage: "calendar")
+                Label(L10n.t("quota.b98dcfe557"), systemImage: "calendar")
                     .font(.caption.weight(.semibold))
                 Text(analysisRange.label)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
                 HStack(spacing: 4) {
-                    Text("该账户费用：")
+                    Text(L10n.t("quota.94ab47117b"))
                         .font(.caption.weight(.semibold))
                     DataValueLabel(
                         text: selectedCostText,
-                        status: selectedStatus.prefixed("所选范围费用"),
+                        status: selectedStatus.prefixed(L10n.t("core.floatingSummary.7a286de355")),
                         font: .caption.weight(.semibold)
                     )
                 }
             }
-            Text("仅统计上述时间段内已同步的厂商 UTC 日桶，不参与本地月度预算和告警。")
+            Text(L10n.t("quota.00e05f6d46"))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-            Text("本地预算周期：本机自然月 \(month.range.startDay) 至 \(month.range.endDay)；发生跨月时不会把所选范围当作预算周期。")
+            Text(L10n.f("quota.5ed2de8c3c", month.range.startDay, month.range.endDay))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -559,7 +559,7 @@ struct BudgetEditorView: View {
     }
 
     private var title: String {
-        kind == .budget ? "本地月度预算" : "余额低水位阈值"
+        kind == .budget ? L10n.t("quota.651d436ef1") : L10n.t("quota.66d3cf61d5")
     }
 
     var body: some View {
@@ -574,21 +574,21 @@ struct BudgetEditorView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text("\(account.displayName) · \(model.currencyLabel(for: account))").font(.headline)
                 if kind == .budget {
-                    Text("月度预算按本机自然月统计用量费用，仅用于本机告警，与厂商官方额度分开；使用率达到 80% / 100% 时各触发一次告警。")
+                    Text(L10n.t("quota.a0d01785c8"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
-                    Text("当官方余额低于该值时触发本地告警；余额回升到阈值以上后自动重新布防。余额没有官方上限，因此不显示百分比额度。阈值只作用于当前账户，币种由该账户余额接口确定，不同账户 / 币种分开统计。")
+                    Text(L10n.t("quota.9df43387c3"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 HStack {
-                    TextField("金额", text: $amountText)
+                    TextField(L10n.t("quota.34943c40c9"), text: $amountText)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 180)
-                    Picker("币种", selection: $currency) {
+                    Picker(L10n.t("core.csv.a81ab5e100"), selection: $currency) {
                         ForEach(currencyOptions, id: \.self) { code in Text(code).tag(code) }
                     }
                     .pickerStyle(.menu)
@@ -598,7 +598,7 @@ struct BudgetEditorView: View {
                     InlineErrorView(message: errorMessage)
                 }
                 if model.isDemo {
-                    Text("演示模式下的预算与阈值不可修改。")
+                    Text(L10n.t("quota.0d99a40ae4"))
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
@@ -606,10 +606,10 @@ struct BudgetEditorView: View {
             .padding(20)
             Divider()
             HStack {
-                Button("取消") { dismiss() }
+                Button(L10n.t("common.cancel")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("保存") { save() }
+                Button(L10n.t("common.save")) { save() }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
                     .disabled(model.isDemo)

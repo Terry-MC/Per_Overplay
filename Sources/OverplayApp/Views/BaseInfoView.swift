@@ -30,7 +30,7 @@ struct BaseInfoView: View {
             if model.analysisAccounts.contains(where: { $0.provider == .openrouter }),
                CalendarDay.days(from: model.currentRange).count > 30 {
                 Label(
-                    "OpenRouter 仅提供约 30 个 UTC 日窗口；超出部分不会显示，也不补 0。",
+                    L10n.t("baseInfo.7fa9347c55"),
                     systemImage: "clock.badge.exclamationmark"
                 )
                 .font(.caption)
@@ -43,7 +43,7 @@ struct BaseInfoView: View {
 
             MessageCenterEntryCard(model: model)
 
-            Text("统计只使用本地已同步的厂商数据；缺失数据不补零。token 总量不包含未提供 token 的厂商，费用分币种展示且不做汇率换算。")
+            Text(L10n.t("baseInfo.8629ca7a54"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -55,13 +55,13 @@ struct BaseInfoView: View {
     private var summaryCards: some View {
         let coverage = model.analysisTokenCoverage
         let tokenStatus: DataStatus = coverage.accountsWithTokens == 0
-            ? .missing("所选范围没有提供实际 token 数据的账户")
+            ? .missing(L10n.t("baseInfo.f634ec739a"))
             : .actual
         let costStatus: DataStatus = model.analysisCosts.isEmpty
-            ? .missing("所选范围没有费用数据")
+            ? .missing(L10n.t("baseInfo.9f08b89d94"))
             : .actual
         let requestStatus: DataStatus = model.analysisRequestTotal == nil
-            ? .missing("当前记录的厂商未提供请求数字段")
+            ? .missing(L10n.t("usage.3f20509e5f"))
             : .actual
         let lastSync = model.analysisAccounts.compactMap(\.lastSuccessAt).max()
         let staleCount = model.analysisAccounts.filter { model.isStale($0) }.count
@@ -72,44 +72,44 @@ struct BaseInfoView: View {
 
         return LazyVGrid(columns: metricColumns, alignment: .leading, spacing: 14) {
             MetricCard(
-                title: "Token 总消耗",
+                title: L10n.t("baseInfo.7fb9613799"),
                 valueLines: coverage.accountsWithTokens == 0
                     ? []
                     : [(Money.formatCompactInteger(model.analysisTokenTotal), "tokens")],
-                footnote: "覆盖 \(coverage.accountsWithTokens) / \(coverage.totalAccounts) 个账户 · \(coverage.providersWithTokens) / \(coverage.totalProviders) 个厂商提供 token；不含无 token 数据的厂商。",
+                footnote: L10n.f("baseInfo.7c53ee3c6b", coverage.accountsWithTokens, coverage.totalAccounts, coverage.providersWithTokens, coverage.totalProviders),
                 symbol: "number",
                 isDemo: model.isDemo,
                 status: tokenStatus
             )
             MetricCard(
-                title: "费用",
+                title: L10n.t("metric.cost"),
                 valueLines: model.analysisCosts.isEmpty ? [] : UIFormat.costLines(model.analysisCosts),
-                footnote: "分币种展示，不跨币种合并；仅含提供费用字段的厂商。",
+                footnote: L10n.t("baseInfo.24b771484b"),
                 symbol: "dollarsign.circle",
                 isDemo: model.isDemo,
                 status: costStatus
             )
             MetricCard(
-                title: "请求数",
-                valueLines: model.analysisRequestTotal.map { [(Money.formatCompactInteger($0), "次")] } ?? [],
+                title: L10n.t("core.analysisRange.b28376ff80"),
+                valueLines: model.analysisRequestTotal.map { [(Money.formatCompactInteger($0), L10n.t("usage.5e5b8169ee"))] } ?? [],
                 footnote: model.analysisRequestTotal == nil
-                    ? "厂商未提供请求数字段，不显示 0。"
-                    : "仅累加提供请求数字段的记录。",
+                    ? L10n.t("baseInfo.88a40571d3")
+                    : L10n.t("baseInfo.18c1baa4c4"),
                 symbol: "arrow.left.arrow.right",
                 isDemo: model.isDemo,
                 status: requestStatus
             )
             MetricCard(
-                title: "数据新鲜度",
+                title: L10n.t("baseInfo.ce72378885"),
                 valueLines: [
-                    (lastSync.map { DateFormatters.shortTime.string(from: $0) } ?? "尚未同步", "最近成功"),
-                    ("\(staleCount)", "过期账户"),
-                    ("\(abnormalCount)", "异常账户")
+                    (lastSync.map { DateFormatters.shortTime.string(from: $0) } ?? L10n.t("health.neverSynced"), L10n.t("baseInfo.35b15d3f3f")),
+                    ("\(staleCount)", L10n.t("baseInfo.0191542e9c")),
+                    ("\(abnormalCount)", L10n.t("baseInfo.4f50336f57"))
                 ],
-                footnote: "告警未确认 \(model.unacknowledgedAlertCount) 条；过期阈值为 2 个刷新周期。",
+                footnote: L10n.f("baseInfo.8cbcd8ac1a", model.unacknowledgedAlertCount),
                 symbol: "clock.badge.checkmark",
                 isDemo: model.isDemo,
-                status: lastSync == nil ? .missing("尚未完成任何成功同步") : .actual
+                status: lastSync == nil ? .missing(L10n.t("baseInfo.665be664fe")) : .actual
             )
         }
     }
@@ -117,18 +117,18 @@ struct BaseInfoView: View {
     private var providerSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("厂商概览")
+                Text(L10n.t("baseInfo.40fbaed843"))
                     .font(.title3.weight(.semibold))
                 Text("\(model.analysisAccounts.count)")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 if let platform = model.overviewPlatformFilter {
-                    Text("仅显示 \(platform.displayName)")
+                    Text(L10n.f("baseInfo.60f3dec380", platform.displayName))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text("点击卡片进入厂商详情")
+                Text(L10n.t("baseInfo.f7bc664f3f"))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -137,13 +137,13 @@ struct BaseInfoView: View {
                 SectionCard {
                     EmptyStateView(
                         symbol: "rectangle.stack.badge.plus",
-                        title: model.accounts.isEmpty ? "暂无厂商账户" : "当前筛选没有账户",
+                        title: model.accounts.isEmpty ? L10n.t("baseInfo.1d54343fa9") : L10n.t("baseInfo.cd266e99f9"),
                         message: model.accounts.isEmpty
-                            ? "使用窗口右上角“添加账户”，或切换到演示模式查看各平台数据。"
-                            : "清除平台 / 账户筛选，或切换到其他时间范围。"
+                            ? L10n.t("baseInfo.76b012fb15")
+                            : L10n.t("baseInfo.ee2f9d97b0")
                     ) {
                         if !model.accounts.isEmpty {
-                            Button("清除筛选") {
+                            Button(L10n.t("messages.4bbc4e5fd9")) {
                                 model.overviewPlatformFilter = nil
                                 model.overviewAccountFilter = nil
                             }
@@ -178,12 +178,12 @@ struct BaseInfoView: View {
                 }
             }
             HStack(spacing: 8) {
-                Text(model.overviewPlatformFilter.map { "仅显示 \($0.displayName)" } ?? "全部 AI 平台")
+                Text(model.overviewPlatformFilter.map { L10n.f("baseInfo.60f3dec380", $0.displayName) } ?? L10n.t("baseInfo.2d85b1ea90"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
                 if presentProviders.count > 3 {
-                    Label("窗口较窄时平台标签自动换行", systemImage: "arrow.turn.down.left")
+                    Label(L10n.t("baseInfo.400505d1d9"), systemImage: "arrow.turn.down.left")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
@@ -207,7 +207,7 @@ struct BaseInfoView: View {
 
     private func accountFilterChips(platform: ProviderKind) -> some View {
         FlowLayout(spacing: 6, lineSpacing: 6) {
-            accountChip(nil, title: "全部 \(platform.displayName) 账户")
+            accountChip(nil, title: L10n.f("baseInfo.e77b86c074", platform.displayName))
             ForEach(model.overviewPlatformAccounts) { account in
                 accountChip(account.id, title: account.displayName)
             }
@@ -312,7 +312,7 @@ private struct ProviderOverviewCard: View {
                     AnomalyNotice(message: issue)
                 }
                 if model.isStale(account) {
-                    Label("数据已过期；仍展示最近一次有效数据。", systemImage: "clock.badge.exclamationmark")
+                    Label(L10n.t("baseInfo.c11c8a772e"), systemImage: "clock.badge.exclamationmark")
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
@@ -332,7 +332,7 @@ private struct ProviderOverviewCard: View {
                         .font(.headline)
                     if model.isDemo || account.isDemo { DemoTag() }
                     if organizationTag { OrganizationTag() }
-                    if !account.enabled { StatusTag(text: "已禁用", color: .secondary) }
+                    if !account.enabled { StatusTag(text: L10n.t("health.disabled"), color: .secondary) }
                 }
                 Text(subtitle)
                     .font(.caption)
@@ -360,27 +360,27 @@ private struct ProviderOverviewCard: View {
             .help(refreshHelp)
 
             Menu {
-                Button("打开详情", action: onDetail)
-                Button("编辑账户", action: onEdit)
-                Button(account.enabled ? "禁用账户" : "启用账户") {
+                Button(L10n.t("baseInfo.0d428278d9"), action: onDetail)
+                Button(L10n.t("accountEditor.608f93e8ea"), action: onEdit)
+                Button(account.enabled ? L10n.t("baseInfo.b9794fa830") : L10n.t("settings.ae0ba48faa")) {
                     model.setAccountEnabled(account, enabled: !account.enabled)
                 }
                 Divider()
-                Button("删除账户", role: .destructive, action: onDelete)
+                Button(L10n.t("deleteAccount.9259840611"), role: .destructive, action: onDelete)
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
             .menuStyle(.borderlessButton)
             .frame(width: 28)
             .disabled(model.isDemo)
-            .help("账户操作")
+            .help(L10n.t("baseInfo.ef38c6c524"))
         }
     }
 
     private var subtitle: String {
         [
             account.provider.displayName,
-            account.officialName.map { "官方 \($0)" },
+            account.officialName.map { L10n.f("settings.cf2ff9d62a", $0) },
             model.currencyLabel(for: account),
             account.capabilities.summary
         ].compactMap { $0 }.joined(separator: " · ")
@@ -398,11 +398,11 @@ private struct ProviderOverviewCard: View {
             [.budgetWarning, .dataStale, .lineWarning].contains($0.kind)
         }
         if critical {
-            Label("警戒", systemImage: "exclamationmark.octagon.fill")
+            Label(L10n.t("baseInfo.5cb58536e5"), systemImage: "exclamationmark.octagon.fill")
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.red)
         } else if warning {
-            Label("告知", systemImage: "exclamationmark.circle.fill")
+            Label(L10n.t("baseInfo.d55a864f5c"), systemImage: "exclamationmark.circle.fill")
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.orange)
         }
@@ -410,11 +410,11 @@ private struct ProviderOverviewCard: View {
 
 
     private var refreshHelp: String {
-        if let reason = model.refreshBlockedReason(for: account) { return reason }
-        if model.isSyncing(account) { return "正在同步该账户" }
-        if model.isDemo { return "演示模式不发起网络请求" }
-        if !account.enabled { return "账户已禁用，请先启用" }
-        return "立即刷新该账户"
+        if let reason = model.refreshBlockedReason(for: account) { return L10n.t(reason) }
+        if model.isSyncing(account) { return L10n.t("baseInfo.8560e9be4e") }
+        if model.isDemo { return L10n.t("floating.280880b4de") }
+        if !account.enabled { return L10n.t("baseInfo.6f96432f99") }
+        return L10n.t("providerDetail.03e03ba84f")
     }
 
     @ViewBuilder
@@ -424,7 +424,7 @@ private struct ProviderOverviewCard: View {
         } else if account.capabilities.credits || account.capabilities.usage {
             quotaAndUsageMetric
         } else {
-            Text("该厂商当前没有可展示的用量、费用或额度指标。")
+            Text(L10n.t("baseInfo.dc9cdca5c4"))
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -433,14 +433,14 @@ private struct ProviderOverviewCard: View {
     @ViewBuilder
     private var balanceMetric: some View {
         let balances = model.latestBalances(for: account)
-        let status = model.balanceDataStatus(for: account).prefixed("官方余额")
+        let status = model.balanceDataStatus(for: account).prefixed(L10n.t("core.floatingSummary.f5f1ad2311"))
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 16) {
                 if balances.isEmpty {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("官方余额").font(.caption).foregroundStyle(.secondary)
+                        Text(L10n.t("core.floatingSummary.f5f1ad2311")).font(.caption).foregroundStyle(.secondary)
                         DataValueLabel(
-                            text: "无数据",
+                            text: L10n.t("dataStatus.6ffa7e6d35"),
                             status: status,
                             font: .system(size: 24, weight: .semibold, design: .rounded)
                         )
@@ -448,7 +448,7 @@ private struct ProviderOverviewCard: View {
                 } else {
                     ForEach(balances) { balance in
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("官方余额 · \(balance.currency)")
+                            Text(L10n.f("quota.e0544e29c7", balance.currency))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             DataValueLabel(
@@ -459,8 +459,8 @@ private struct ProviderOverviewCard: View {
                             if let threshold = account.balanceThreshold, threshold.currency == balance.currency {
                                 Text(
                                     balance.total < threshold.amount
-                                        ? "低于阈值 \(Money.formatBalance(threshold.amount, currency: threshold.currency))"
-                                        : "高于阈值 \(Money.formatBalance(threshold.amount, currency: threshold.currency))"
+                                        ? L10n.f("baseInfo.0626c3bc1b", Money.formatBalance(threshold.amount, currency: threshold.currency))
+                                        : L10n.f("baseInfo.eabd8c1ea6", Money.formatBalance(threshold.amount, currency: threshold.currency))
                                 )
                                 .font(.caption2)
                                 .foregroundStyle(balance.total < threshold.amount ? .orange : .green)
@@ -470,11 +470,11 @@ private struct ProviderOverviewCard: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("所选范围 token").font(.caption2).foregroundStyle(.secondary)
-                    Text("厂商未提供").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    Text(L10n.t("baseInfo.4a6fb8eefc")).font(.caption2).foregroundStyle(.secondary)
+                    Text(L10n.t("providerDetail.567cdafa2a")).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                 }
             }
-            Text("余额型厂商：无百分比分母，不显示伪造进度；详情展示余额快照曲线。")
+            Text(L10n.t("baseInfo.c0a161ce12"))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -483,12 +483,12 @@ private struct ProviderOverviewCard: View {
     @ViewBuilder
     private var quotaAndUsageMetric: some View {
         let quota = model.latestQuota(for: account)
-        let quotaStatus = model.creditDataStatus(for: account).prefixed("官方额度")
+        let quotaStatus = model.creditDataStatus(for: account).prefixed(L10n.t("core.floatingSummary.f625451199"))
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 22) {
                 if let quota {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(account.provider == .openrouter ? "credits 剩余" : "官方额度剩余")
+                        Text(account.provider == .openrouter ? L10n.t("baseInfo.6bd2bad8b1") : L10n.t("baseInfo.682ca815ac"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         DataValueLabel(
@@ -499,9 +499,9 @@ private struct ProviderOverviewCard: View {
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("官方额度").font(.caption).foregroundStyle(.secondary)
+                        Text(L10n.t("core.floatingSummary.f625451199")).font(.caption).foregroundStyle(.secondary)
                         DataValueLabel(
-                            text: "无数据",
+                            text: L10n.t("dataStatus.6ffa7e6d35"),
                             status: quotaStatus,
                             font: .system(size: 20, weight: .semibold, design: .rounded)
                         )
@@ -509,22 +509,22 @@ private struct ProviderOverviewCard: View {
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("所选范围").font(.caption2).foregroundStyle(.secondary)
+                    Text(L10n.t("baseInfo.8bb2d0af98")).font(.caption2).foregroundStyle(.secondary)
                     if totals.tokensAvailable {
                         Text("\(Money.formatCompactInteger(totals.totalTokens)) tokens")
                             .font(.callout.weight(.semibold))
                     } else {
-                        Text("Token：厂商未提供").font(.caption).foregroundStyle(.secondary)
+                        Text(L10n.t("baseInfo.f5a04ffd39")).font(.caption).foregroundStyle(.secondary)
                     }
                     if totals.costAvailable {
                         Text(UIFormat.costLines(totals.costs).map { $0.0 }.joined(separator: " · "))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("费用：厂商未提供").font(.caption2).foregroundStyle(.secondary)
+                        Text(L10n.t("baseInfo.ecbf87414d")).font(.caption2).foregroundStyle(.secondary)
                     }
                     if totals.requestsAvailable {
-                        Text("\(Money.formatCompactInteger(totals.requests)) 次请求")
+                        Text(L10n.f("floating.9c7b978970", Money.formatCompactInteger(totals.requests)))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -534,13 +534,13 @@ private struct ProviderOverviewCard: View {
             if let quota, quotaStatus.isActual, let percent = quota.usagePercent, !forceUnavailable {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text("官方额度使用率").font(.caption2).foregroundStyle(.secondary)
+                        Text(L10n.t("quota.9bfba85a1b")).font(.caption2).foregroundStyle(.secondary)
                         Spacer()
                         Text(Money.percent(percent)).font(.caption.weight(.semibold))
                     }
                     ProgressView(value: min(max(NSDecimalNumber(decimal: percent).doubleValue / 100, 0), 1))
                         .tint(.blue)
-                    Text("中性使用率；告警线在“新增厂商”页按账户配置，未启用时不显示告知 / 警戒标记。")
+                    Text(L10n.t("baseInfo.9ffcfa3aec"))
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
@@ -556,13 +556,13 @@ private struct ProviderOverviewCard: View {
             if let budget = account.budget, let ratio = model.budgetRatio(for: account) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text("本地预算使用率（本机自然月）").font(.caption2).foregroundStyle(.secondary)
+                        Text(L10n.t("baseInfo.d29c4f346f")).font(.caption2).foregroundStyle(.secondary)
                         Spacer()
                         Text(Money.percent(ratio)).font(.caption.weight(.semibold))
                     }
                     ProgressView(value: min(max(NSDecimalNumber(decimal: ratio).doubleValue / 100, 0), 1))
                         .tint(.blue)
-                    Text("预算 \(Money.formatBalance(budget.amount, currency: budget.currency)) · 与官方额度分开。")
+                    Text(L10n.f("baseInfo.8b1f22e1ab", Money.formatBalance(budget.amount, currency: budget.currency)))
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
@@ -575,7 +575,7 @@ private struct ProviderOverviewCard: View {
     private var alertRuleSummary: some View {
         if account.alertConfig == nil {
             if account.budget != nil || account.balanceThreshold != nil {
-                Text("旧阈值兼容：预算 80% / 100%\(account.balanceThreshold.map { " · 余额 \(Money.formatBalance($0.amount, currency: $0.currency))" } ?? "")；新告警线默认关闭。")
+                Text(L10n.f("baseInfo.4403282cda", account.balanceThreshold.map { L10n.f("baseInfo.legacyBalanceSuffix", Money.formatBalance($0.amount, currency: $0.currency)) } ?? ""))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -584,7 +584,7 @@ private struct ProviderOverviewCard: View {
             if !rules.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(Array(rules.enumerated()), id: \.offset) { _, rule in
-                        Text("\(rule.severity == .warning ? "告知线" : "警戒线")：\(rule.metric.label) \(thresholdText(rule)) · \(rule.source)")
+                        Text("\(rule.severity == .warning ? L10n.t("addProvider.35f0803018") : L10n.t("addProvider.8d56556021"))：\(rule.metric.label) \(thresholdText(rule)) · \(rule.source)")
                             .font(.caption2)
                             .foregroundStyle(rule.severity == .warning ? .orange : .red)
                     }
@@ -612,7 +612,7 @@ private struct ProviderOverviewCard: View {
                 .font(.caption)
                 .foregroundStyle(model.isStale(account) ? .orange : .secondary)
             Spacer()
-            Button("查看详情", action: onDetail)
+            Button(L10n.t("baseInfo.faea8c1db9"), action: onDetail)
                 .buttonStyle(.link)
                 .font(.caption)
             Text(capabilityFootnote)
@@ -624,18 +624,18 @@ private struct ProviderOverviewCard: View {
 
     private var capabilityFootnote: String {
         if account.provider == .deepseek {
-            return "来源：DeepSeek 余额快照 · 非逐请求 token"
+            return L10n.t("baseInfo.e8bf4ef6d0")
         }
         if account.provider == .openrouter {
-            return "来源：OpenRouter activity · 约 30 天 UTC 日桶"
+            return L10n.t("baseInfo.5871102d85")
         }
         if account.provider == .genericHTTP {
-            return "来源：通用 HTTP · 仅映射字段"
+            return L10n.t("baseInfo.d40c85e679")
         }
         if account.isDemo || model.isDemo {
-            return "来源：演示数据 · 不联网"
+            return L10n.t("baseInfo.e828a09325")
         }
-        return "来源：\(account.provider.displayName) 官方只读接口"
+        return L10n.f("baseInfo.b27a18c7a0", account.provider.displayName)
     }
 }
 
@@ -643,14 +643,14 @@ private struct OrganizationTag: View {
     var body: some View {
         HStack(spacing: 3) {
             Image(systemName: "building.2")
-            Text("组织级")
+            Text(L10n.t("providerDetail.9e4000b2b7"))
         }
         .font(.caption2.weight(.semibold))
         .foregroundStyle(.blue)
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
         .background(Capsule().fill(Color.blue.opacity(0.12)))
-        .accessibilityLabel("组织级数据")
+        .accessibilityLabel(L10n.t("baseInfo.d6b4cae72b"))
     }
 }
 

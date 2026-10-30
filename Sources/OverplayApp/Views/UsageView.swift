@@ -26,7 +26,7 @@ struct UsageView: View {
                 missingDataNotes
             }
 
-            Text("费用和 tokens 仅来自各厂商官方只读接口；不调用推理接口。CSV 导出仅包含当前筛选，且不包含任何凭证。")
+            Text(L10n.t("usage.af56043f83"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -36,15 +36,15 @@ struct UsageView: View {
         SectionCard(isDemo: model.isDemo) {
             EmptyStateView(
                 symbol: "chart.bar.doc.horizontal",
-                title: "所选范围没有用量数据",
+                title: L10n.t("usage.91913c9ff5"),
                 message: model.hasUsageFilters
-                    ? "当前账户 / 模型筛选没有匹配记录。可清除筛选或切换时间范围。"
+                    ? L10n.t("usage.924ec1757a")
                     : (model.isDemo
-                        ? "演示平台仅覆盖最近 30 个完整 UTC 日；DeepSeek 官方不提供历史 token / 费用接口。缺失数据以空状态展示，不使用 0 占位。"
-                        : "OpenRouter 仅提供最近约 30 个 UTC 日；DeepSeek 官方不提供历史 token / 费用接口。缺失数据以「无数据 / 厂商未提供」空状态展示，不使用 0 占位。")
+                        ? L10n.t("usage.bbf85385bc")
+                        : L10n.t("usage.faf5511fd2"))
             ) {
                 if model.hasUsageFilters {
-                    Button("清除筛选") { model.resetUsageFilters() }
+                    Button(L10n.t("messages.4bbc4e5fd9")) { model.resetUsageFilters() }
                 }
             }
         }
@@ -53,20 +53,20 @@ struct UsageView: View {
     private var chartsAndTables: some View {
         VStack(alignment: .leading, spacing: 18) {
             SectionCard(
-                title: "费用趋势",
-                subtitle: currency.map { "按厂商堆叠 · \($0) · 厂商 UTC 日" } ?? "无费用数据",
+                title: L10n.t("usage.dc3207941a"),
+                subtitle: currency.map { L10n.f("usage.132f486445", $0) } ?? L10n.t("usage.e8dbc48a7f"),
                 isDemo: model.isDemo
             ) {
                 if costSeries.isEmpty {
-                    emptyChart("没有可绘制的费用数据。图表不绘制占位 0；上方汇总卡显示空状态与原因。")
+                    emptyChart(L10n.t("usage.b8ba932d66"))
                 } else {
                     let allDays = CalendarDay.days(from: model.currentRange)
                     Chart(costSeries) { point in
                         BarMark(
-                            x: .value("日期", point.day),
-                            y: .value("费用", point.cost)
+                            x: .value(L10n.t("usage.b6fed9af83"), point.day),
+                            y: .value(L10n.t("metric.cost"), point.cost)
                         )
-                        .foregroundStyle(by: .value("厂商", point.provider))
+                        .foregroundStyle(by: .value(L10n.t("core.csv.0c131e3964"), point.provider))
                     }
                     .chartXScale(domain: allDays)
                     .chartXAxis {
@@ -93,13 +93,13 @@ struct UsageView: View {
                     .frame(height: 230)
                     Text(
                         model.isDemo
-                            ? "来源：演示数据（虚拟用量）。图表保留所选范围的所有日期；无数据日期留空，不绘制 0。"
-                            : "来源：OpenRouter 官方 activity（其余厂商未提供费用）。图表保留所选范围的所有日期；无数据日期留空，不绘制 0。"
+                            ? L10n.t("usage.81d55bd84f")
+                            : L10n.t("usage.fce91b5a6e")
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     if !costSeries.contains(where: { $0.day == model.currentRange.endDay }) {
-                        Text("\(model.currentRange.endDay)（UTC）无数据：图表保留该日期空白，下一 UTC 日回填。")
+                        Text(L10n.f("usage.1456c7de21", model.currentRange.endDay))
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
@@ -107,30 +107,30 @@ struct UsageView: View {
             }
 
             SectionCard(
-                title: "Token 趋势",
-                subtitle: "仅包含提供实际 token 数据的厂商",
+                title: L10n.t("usage.0abd48a0b6"),
+                subtitle: L10n.t("usage.d7ef99f7c6"),
                 isDemo: model.isDemo
             ) {
                 if tokenSeries.isEmpty {
-                    emptyChart("厂商未提供 token 历史。DeepSeek 无历史用量接口；图表不绘制占位 0，上方汇总卡显示空状态与原因。")
+                    emptyChart(L10n.t("usage.5f1da33cec"))
                 } else {
                     let allDays = CalendarDay.days(from: model.currentRange)
                     Chart {
                         ForEach(tokenSeries) { point in
                             if point.promptAvailable {
                                 LineMark(
-                                    x: .value("日期", point.day),
+                                    x: .value(L10n.t("usage.b6fed9af83"), point.day),
                                     y: .value("tokens", point.prompt)
                                 )
-                                .foregroundStyle(by: .value("类型", "Prompt"))
+                                .foregroundStyle(by: .value(L10n.t("messages.e4e46c7235"), "Prompt"))
                                 .interpolationMethod(.monotone)
                             }
                             if point.completionAvailable {
                                 LineMark(
-                                    x: .value("日期", point.day),
+                                    x: .value(L10n.t("usage.b6fed9af83"), point.day),
                                     y: .value("tokens", point.completion)
                                 )
-                                .foregroundStyle(by: .value("类型", "Completion"))
+                                .foregroundStyle(by: .value(L10n.t("messages.e4e46c7235"), "Completion"))
                                 .interpolationMethod(.monotone)
                             }
                         }
@@ -150,13 +150,13 @@ struct UsageView: View {
                     .frame(height: 210)
                     Text(
                         model.isDemo
-                            ? "图表仅绘制 Prompt / Completion；Reasoning 属于 completion 子集、Cached 属于 prompt 子集，厂商单列，不重复计入总量。明细与模型表展示全部字段；演示数据窗口约 30 个完整 UTC 日。"
-                            : "图表仅绘制 Prompt / Completion；Reasoning 属于 completion 子集、Cached 属于 prompt 子集，厂商单列，不重复计入总量。明细与模型表展示全部字段；OpenRouter 用量窗口约 30 个 UTC 日。"
+                            ? L10n.t("usage.3242a28c04")
+                            : L10n.t("usage.214281b2c6")
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     if !tokenSeries.contains(where: { $0.day == model.currentRange.endDay }) {
-                        Text("\(model.currentRange.endDay)（UTC）无数据：图表保留该日期空白，下一 UTC 日回填。")
+                        Text(L10n.f("usage.1456c7de21", model.currentRange.endDay))
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
@@ -164,8 +164,8 @@ struct UsageView: View {
             }
 
             if modelUsages.isEmpty {
-                SectionCard(title: "模型拆分", subtitle: "无数据", isDemo: model.isDemo) {
-                    Text("所选范围没有可用的模型级数据。")
+                SectionCard(title: L10n.t("usage.0d114aeb20"), subtitle: L10n.t("dataStatus.6ffa7e6d35"), isDemo: model.isDemo) {
+                    Text(L10n.t("usage.e833bdae74"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -184,7 +184,7 @@ struct UsageView: View {
             !$0.capabilities.usage || !availableAccounts.contains($0.id)
         }
         if !gaps.isEmpty {
-            SectionCard(title: "数据缺口", isDemo: model.isDemo) {
+            SectionCard(title: L10n.t("usage.9d224cc286"), isDemo: model.isDemo) {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(gaps) { account in
                         HStack(alignment: .top, spacing: 8) {
@@ -194,11 +194,11 @@ struct UsageView: View {
                                 Text(account.displayName)
                                     .font(.caption.weight(.semibold))
                                 if !account.capabilities.usage {
-                                    Text("厂商未提供历史 token / 费用数据。DeepSeek 官方仅提供余额快照；界面不会伪造曲线，汇总卡显示空状态并注明原因。")
+                                    Text(L10n.t("usage.cbc43acf36"))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 } else {
-                                    Text(model.isDemo ? "所选范围无用量记录。演示数据仅覆盖最近 30 个完整 UTC 日；请检查筛选或时间范围。" : "所选范围无 activity 记录。OpenRouter 仅覆盖最近约 30 个 UTC 日；请检查同步状态或时间范围。")
+                                    Text(model.isDemo ? L10n.t("usage.78e27f2359") : L10n.t("usage.445431ea37"))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -219,7 +219,7 @@ struct UsageView: View {
                         get: { model.effectiveCurrency ?? "" },
                         set: { model.selectedCurrency = $0 }
                     )
-                    Picker("币种", selection: binding) {
+                    Picker(L10n.t("core.csv.a81ab5e100"), selection: binding) {
                         ForEach(model.availableCurrencies, id: \.self) { code in
                             Text(code).tag(code)
                         }
@@ -227,13 +227,13 @@ struct UsageView: View {
                     .pickerStyle(.menu)
                     .frame(width: 110)
                 } else if let currency {
-                    Text("币种 \(currency)")
+                    Text(L10n.f("usage.51c47086e2", currency))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
-                Picker("账户", selection: $model.usageAccountFilter) {
-                    Text("全部账户").tag(String?.none)
+                Picker(L10n.t("core.csv.c3d92b20c8"), selection: $model.usageAccountFilter) {
+                    Text(L10n.t("messages.c5e5d57837")).tag(String?.none)
                     ForEach(model.filterAccounts, id: \.id) { account in
                         Text(account.name).tag(Optional(account.id))
                     }
@@ -241,8 +241,8 @@ struct UsageView: View {
                 .pickerStyle(.menu)
                 .frame(width: 145)
 
-                Picker("模型", selection: $model.usageModelFilter) {
-                    Text("全部模型").tag(String?.none)
+                Picker(L10n.t("core.csv.98fd0cbd9c"), selection: $model.usageModelFilter) {
+                    Text(L10n.t("usage.688facc5f5")).tag(String?.none)
                     ForEach(model.filterModels, id: \.self) { model in
                         Text(model).tag(Optional(model))
                     }
@@ -257,7 +257,7 @@ struct UsageView: View {
                         Image(systemName: "xmark.circle")
                     }
                     .buttonStyle(.plain)
-                    .help("清除账户 / 模型筛选")
+                    .help(L10n.t("usage.cced1eef57"))
                 }
 
                 Spacer()
@@ -265,15 +265,15 @@ struct UsageView: View {
                 Button {
                     exportCSV()
                 } label: {
-                    Label("导出 CSV", systemImage: "square.and.arrow.up")
+                    Label(L10n.t("usage.7e9cc8635e"), systemImage: "square.and.arrow.up")
                 }
                 .disabled(records.isEmpty)
             }
 
             if rangeExceedsThirtyDays {
                 Text(model.isDemo
-                    ? "演示数据仅覆盖最近 30 个完整 UTC 日；超出窗口的日期留空，不绘制 0。"
-                    : "OpenRouter 仅提供最近约 30 个 UTC 日；超出窗口的日期留空，不绘制 0。")
+                    ? L10n.t("usage.852dbbb9b3")
+                    : L10n.t("usage.ef8e4c883f"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -297,17 +297,17 @@ struct UsageView: View {
         let tokenLines: [(String, String?)] = tokenCounts.isEmpty
             ? [] : [(Money.formatInteger(tokenCounts.reduce(0, +)), "tokens")]
         let requestLines: [(String, String?)] = requestCounts.isEmpty
-            ? [] : [(Money.formatInteger(requestCounts.reduce(0, +)), "次")]
+            ? [] : [(Money.formatInteger(requestCounts.reduce(0, +)), L10n.t("usage.5e5b8169ee"))]
         let baseStatus = model.usageDataStatus()
         let costStatus: DataStatus = (costLines.isEmpty
-            ? (records.isEmpty ? baseStatus : .missing("当前记录的厂商未提供费用字段"))
-            : baseStatus).prefixed("筛选范围内费用")
+            ? (records.isEmpty ? baseStatus : .missing(L10n.t("usage.4b3624093d")))
+            : baseStatus).prefixed(L10n.t("usage.5ae7f19c41"))
         let tokenStatus: DataStatus = (tokenLines.isEmpty
-            ? (records.isEmpty ? baseStatus : .missing("当前记录的厂商未提供 token 字段"))
+            ? (records.isEmpty ? baseStatus : .missing(L10n.t("usage.16a9dbdd83")))
             : baseStatus).prefixed("tokens")
         let requestStatus: DataStatus = (requestLines.isEmpty
-            ? (records.isEmpty ? baseStatus : .missing("当前记录的厂商未提供请求数字段"))
-            : baseStatus).prefixed("请求数")
+            ? (records.isEmpty ? baseStatus : .missing(L10n.t("usage.3f20509e5f")))
+            : baseStatus).prefixed(L10n.t("core.analysisRange.b28376ff80"))
 
         return LazyVGrid(
             columns: [GridItem(.adaptive(minimum: 210), spacing: 14)],
@@ -315,9 +315,9 @@ struct UsageView: View {
             spacing: 14
         ) {
             MetricCard(
-                title: "筛选范围内费用",
+                title: L10n.t("usage.5ae7f19c41"),
                 valueLines: costLines,
-                footnote: costStatus.isActual ? "按当前币种筛选；分币种展示，不合并。" : (costStatus.reason ?? "无数据"),
+                footnote: costStatus.isActual ? L10n.t("usage.5e8b16e6c8") : (costStatus.reason ?? L10n.t("dataStatus.6ffa7e6d35")),
                 symbol: "dollarsign.circle",
                 isDemo: model.isDemo,
                 status: costStatus
@@ -325,40 +325,40 @@ struct UsageView: View {
             MetricCard(
                 title: "tokens",
                 valueLines: tokenLines,
-                footnote: tokenStatus.isActual ? "仅统计提供实际字段的记录。" : (tokenStatus.reason ?? "无数据"),
+                footnote: tokenStatus.isActual ? L10n.t("usage.9b067de74b") : (tokenStatus.reason ?? L10n.t("dataStatus.6ffa7e6d35")),
                 symbol: "number",
                 isDemo: model.isDemo,
                 status: tokenStatus
             )
             MetricCard(
-                title: "请求数",
+                title: L10n.t("core.analysisRange.b28376ff80"),
                 valueLines: requestLines,
-                footnote: requestStatus.isActual ? "厂商提供时展示。" : (requestStatus.reason ?? "无数据"),
+                footnote: requestStatus.isActual ? L10n.t("usage.ea6b3baed6") : (requestStatus.reason ?? L10n.t("dataStatus.6ffa7e6d35")),
                 symbol: "arrow.left.arrow.right",
                 isDemo: model.isDemo,
                 status: requestStatus
             )
             MetricCard(
-                title: "数据记录",
-                valueLines: [(String(records.count), "条")],
-                footnote: "按账户 / 日期 / 模型 / 供应商去重后存储。",
+                title: L10n.t("usage.85634fa9ef"),
+                valueLines: [(String(records.count), L10n.t("usage.bce2ef6151"))],
+                footnote: L10n.t("usage.3efa5d2552"),
                 symbol: "list.bullet.rectangle",
                 isDemo: model.isDemo,
-                status: baseStatus.prefixed("数据记录")
+                status: baseStatus.prefixed(L10n.t("usage.85634fa9ef"))
             )
         }
     }
 
     private var modelBreakdown: some View {
         SectionCard(
-            title: "模型拆分",
-            subtitle: currency ?? (model.isDemo ? "演示用量记录" : "OpenRouter activity"),
+            title: L10n.t("usage.0d114aeb20"),
+            subtitle: currency ?? (model.isDemo ? L10n.t("usage.c6dbb0bba9") : "OpenRouter activity"),
             isDemo: model.isDemo
         ) {
             let totalsByCurrency = model.costs(records)
             VStack(spacing: 0) {
                 modelGridRow(
-                    ["模型", "账户", "Prompt", "Completion", "Reasoning", "Cached", "请求数", "usage 费用", "占比"],
+                    [L10n.t("core.csv.98fd0cbd9c"), L10n.t("core.csv.c3d92b20c8"), "Prompt", "Completion", "Reasoning", "Cached", L10n.t("core.analysisRange.b28376ff80"), L10n.t("usage.590d36deba"), L10n.t("usage.380a2fed3f")],
                     header: true
                 )
                 ForEach(modelUsages) { usage in
@@ -368,19 +368,19 @@ struct UsageView: View {
                     modelGridRow([
                         usage.model,
                         usage.accountName,
-                        usage.promptAvailable ? Money.formatInteger(usage.promptTokens) : "未提供",
-                        usage.completionAvailable ? Money.formatInteger(usage.completionTokens) : "未提供",
-                        usage.reasoningAvailable ? Money.formatInteger(usage.reasoningTokens) : "未提供",
-                        usage.cachedAvailable ? Money.formatInteger(usage.cachedTokens) : "未提供",
-                        usage.requestsAvailable ? Money.formatInteger(usage.requests) : "未提供",
+                        usage.promptAvailable ? Money.formatInteger(usage.promptTokens) : L10n.t("core.csv.071fb244ea"),
+                        usage.completionAvailable ? Money.formatInteger(usage.completionTokens) : L10n.t("core.csv.071fb244ea"),
+                        usage.reasoningAvailable ? Money.formatInteger(usage.reasoningTokens) : L10n.t("core.csv.071fb244ea"),
+                        usage.cachedAvailable ? Money.formatInteger(usage.cachedTokens) : L10n.t("core.csv.071fb244ea"),
+                        usage.requestsAvailable ? Money.formatInteger(usage.requests) : L10n.t("core.csv.071fb244ea"),
                         usage.costAvailable
                             ? Money.formatCost(usage.cost, currency: usage.currency ?? currency ?? "USD")
-                            : "未提供",
+                            : L10n.t("core.csv.071fb244ea"),
                         share.map { Money.percent($0) } ?? "—"
                     ], header: false)
                     if usage.byokAvailable && usage.byokCost > 0 {
                         HStack {
-                            Text("BYOK 费用（与 credits 消耗分开）")
+                            Text(L10n.t("usage.c764cbec53"))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                             Spacer()
@@ -391,7 +391,7 @@ struct UsageView: View {
                         .padding(.leading, 2)
                         .padding(.top, 3)
                     }
-                    Text("来源：\(usage.source) · 最近更新 \(UIFormat.compactDate(usage.lastUpdated))")
+                    Text(L10n.f("usage.4a763ed3ae", usage.source, UIFormat.compactDate(usage.lastUpdated)))
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .padding(.top, 2)
@@ -420,18 +420,18 @@ struct UsageView: View {
 
     private var detailTable: some View {
         SectionCard(
-            title: "用量明细",
-            subtitle: "\(records.count) 条 · \(model.currentRange.label)",
+            title: L10n.t("usage.6bc335e3bc"),
+            subtitle: L10n.f("usage.241b6402ee", records.count, model.currentRange.label),
             isDemo: model.isDemo
         ) {
             if records.isEmpty {
-                emptyChart("所选范围内没有明细数据。")
+                emptyChart(L10n.t("usage.17f4ec224b"))
             } else {
                 let totals = model.costs(records)
                 ScrollView(.horizontal, showsIndicators: true) {
                     VStack(spacing: 0) {
                         detailGridRow(
-                            ["日期", "账户", "模型", "Prompt", "Completion", "Reasoning", "Cached", "请求数", "usage 费用", "BYOK", "占比", "来源", "最后更新"],
+                            [L10n.t("usage.b6fed9af83"), L10n.t("core.csv.c3d92b20c8"), L10n.t("core.csv.98fd0cbd9c"), "Prompt", "Completion", "Reasoning", "Cached", L10n.t("core.analysisRange.b28376ff80"), L10n.t("usage.590d36deba"), "BYOK", L10n.t("usage.380a2fed3f"), L10n.t("core.csv.c63f79e636"), L10n.t("usage.138c939e33")],
                             header: true
                         )
                         ForEach(Array(records.sorted(by: { $0.day > $1.day }).prefix(200))) { record in
@@ -445,13 +445,13 @@ struct UsageView: View {
                                 record.day,
                                 record.accountName,
                                 record.model,
-                                record.promptTokens.map(Money.formatInteger) ?? "未提供",
-                                record.completionTokens.map(Money.formatInteger) ?? "未提供",
-                                record.reasoningTokens.map(Money.formatInteger) ?? "未提供",
-                                record.cachedTokens.map(Money.formatInteger) ?? "未提供",
-                                record.requests.map(Money.formatInteger) ?? "未提供",
-                                record.cost.map { Money.formatCost($0, currency: record.currency ?? "") } ?? "未提供",
-                                record.byokCost.map { Money.formatCost($0, currency: record.currency ?? "USD") } ?? "未提供",
+                                record.promptTokens.map(Money.formatInteger) ?? L10n.t("core.csv.071fb244ea"),
+                                record.completionTokens.map(Money.formatInteger) ?? L10n.t("core.csv.071fb244ea"),
+                                record.reasoningTokens.map(Money.formatInteger) ?? L10n.t("core.csv.071fb244ea"),
+                                record.cachedTokens.map(Money.formatInteger) ?? L10n.t("core.csv.071fb244ea"),
+                                record.requests.map(Money.formatInteger) ?? L10n.t("core.csv.071fb244ea"),
+                                record.cost.map { Money.formatCost($0, currency: record.currency ?? "") } ?? L10n.t("core.csv.071fb244ea"),
+                                record.byokCost.map { Money.formatCost($0, currency: record.currency ?? "USD") } ?? L10n.t("core.csv.071fb244ea"),
                                 share,
                                 record.source,
                                 DateFormatters.mediumDateTime.string(from: record.updatedAt)
@@ -461,11 +461,11 @@ struct UsageView: View {
                     .frame(width: 1120, alignment: .leading)
                 }
                 if records.count > 200 {
-                    Text("仅显示前 200 条；导出 CSV 包含当前筛选的全部记录。")
+                    Text(L10n.t("usage.9542467a2d"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-                Text("来源与时间范围会写入导出文件；缺失字段显示“未提供”。Reasoning 为 completion 子集、Cached 为 prompt 子集，均不重复计入总量。")
+                Text(L10n.t("usage.eb28e26b74"))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -526,9 +526,9 @@ struct UsageView: View {
             Task { @MainActor in
                 switch result {
                 case .success:
-                    model.showBanner("CSV 已导出：\(export.filename)", style: .success)
+                    model.showBanner(L10n.f("usage.e69a391adc", export.filename), style: .success)
                 case .failure(let error):
-                    model.showBanner("CSV 导出失败：\(error.localizedDescription)", style: .error)
+                    model.showBanner(L10n.f("usage.af55c3ac40", L10n.t(error.localizedDescription)), style: .error)
                 }
             }
         }

@@ -25,7 +25,7 @@ struct OnboardingView: View {
                     }
                     Text("Overplay")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
-                    Text("统一查看 DeepSeek 与 OpenRouter 的官方余额、额度和近 30 天用量")
+                    Text(L10n.t("onboarding.697a94c8f0"))
                         .font(.title3)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -34,39 +34,39 @@ struct OnboardingView: View {
                 HStack(alignment: .top, spacing: 16) {
                     feature(
                         symbol: "lock.shield",
-                        title: "密钥只进 Keychain",
-                        text: "API Key 不写入数据库、日志、导出文件或仓库；界面不回显明文。"
+                        title: L10n.t("onboarding.d760777ab8"),
+                        text: L10n.t("onboarding.fd68e8ceac")
                     )
                     feature(
                         symbol: "externaldrive",
-                        title: "数据只存本机",
-                        text: "账户、用量、快照与告警保存在本地 SQLite，无云端、无遥测。"
+                        title: L10n.t("onboarding.6cfa4f14e7"),
+                        text: L10n.t("onboarding.57c63148e4")
                     )
                     feature(
                         symbol: "gauge.with.dots.needle.50percent",
-                        title: "预算与告警",
-                        text: "OpenRouter 月度预算 80% / 100%、DeepSeek 余额低水位与同步异常。"
+                        title: L10n.t("onboarding.c9c671069a"),
+                        text: L10n.t("onboarding.bc023c8242")
                     )
                 }
                 .frame(maxWidth: 980)
 
                 SectionCard {
                     VStack(alignment: .leading, spacing: 14) {
-                        Label("能力说明", systemImage: "info.circle")
+                        Label(L10n.t("onboarding.1990a19d6b"), systemImage: "info.circle")
                             .font(.headline)
                         capabilityRow(
                             "DeepSeek",
-                            "普通 API Key · 余额（CNY / USD）与快照曲线",
-                            "官方不提供历史 token / 费用接口，界面会明确显示“厂商未提供”。"
+                            L10n.t("onboarding.ff702c64b7"),
+                            L10n.t("onboarding.fa35fc2544")
                         )
                         Divider()
                         capabilityRow(
                             "OpenRouter",
-                            "Management Key · credits、额度、最近约 30 天 activity",
-                            "普通 API Key 无法读取 credits / activity；用量日期按厂商 UTC 日桶。"
+                            L10n.t("onboarding.76b7839d3e"),
+                            L10n.t("onboarding.aabb35eda2")
                         )
                         Divider()
-                        Text("本应用不会调用推理接口，也不代理任何 LLM 请求。")
+                        Text(L10n.t("onboarding.0c0b9fc645"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -75,7 +75,7 @@ struct OnboardingView: View {
 
                 VStack(spacing: 10) {
                     Button(action: onAddAccount) {
-                        Label("添加 DeepSeek / OpenRouter 账户", systemImage: "plus.circle.fill")
+                        Label(L10n.t("onboarding.b1d3898482"), systemImage: "plus.circle.fill")
                             .frame(minWidth: 260)
                     }
                     .buttonStyle(.borderedProminent)
@@ -84,19 +84,19 @@ struct OnboardingView: View {
                     Button {
                         model.requestEnterDemoMode()
                     } label: {
-                        Label("进入演示模式", systemImage: "flask")
+                        Label(L10n.t("app.fb7f73f291"), systemImage: "flask")
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
 
-                    Text("演示模式仅使用本地模拟数据，不发起网络请求、不读写 Keychain。进入前需确认免责声明。")
+                    Text(L10n.t("onboarding.b9ff3e7884"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 520)
                 }
 
-                Text("数据仅保存在本地。删除账户会一并删除 Keychain 凭证；历史数据是否保留由你选择（默认保留）。")
+                Text(L10n.t("onboarding.941a2c1544"))
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .multilineTextAlignment(.center)

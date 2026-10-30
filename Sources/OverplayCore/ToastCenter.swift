@@ -138,7 +138,7 @@ public enum AlertNoticePolicy {
         return ToastMessage(
             id: "alert-\(alert.id)",
             title: alert.kind.title,
-            message: "\(alert.accountName) · 当前 \(alert.value) · 阈值 \(alert.threshold)",
+            message: L10n.f("core.toast.707e98502e", alert.accountName, alert.value, alert.threshold),
             style: style,
             alertId: alert.id,
             isDemo: alert.isDemo,

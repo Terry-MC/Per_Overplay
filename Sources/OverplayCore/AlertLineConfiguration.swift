@@ -9,9 +9,9 @@ public enum AlertLineMode: String, Codable, CaseIterable, Identifiable, Sendable
 
     public var label: String {
         switch self {
-        case .off: return "关闭"
-        case .followPublic: return "跟随公共"
-        case .custom: return "自定义"
+        case .off: return L10n.t("common.close")
+        case .followPublic: return L10n.t("core.alertLine.c2bd3a4dfd")
+        case .custom: return L10n.t("core.analysisRange.c493338e8c")
         }
     }
 }
@@ -25,6 +25,15 @@ public enum AlertMetricKind: String, Codable, CaseIterable, Identifiable, Sendab
     public var id: String { rawValue }
 
     public var label: String {
+        switch self {
+        case .budgetPercent: return L10n.t("core.alertLine.c5cc604760")
+        case .quotaPercent: return L10n.t("core.alertLine.4764ef595f")
+        case .balanceAbsolute: return L10n.t("core.alertLine.2c2ac8be9c")
+        case .tokenAbsolute: return L10n.t("core.alertLine.1a9c67fd3c")
+        }
+    }
+
+    public var canonicalLabel: String {
         switch self {
         case .budgetPercent: return "预算 %"
         case .quotaPercent: return "配额 %"
@@ -101,8 +110,8 @@ public enum AlertSeverity: String, Codable, Equatable, Sendable {
 
     public var title: String {
         switch self {
-        case .warning: return "告知线触发"
-        case .critical: return "警戒线触发"
+        case .warning: return L10n.t("alert.lineWarning.title")
+        case .critical: return L10n.t("alert.lineCritical.title")
         }
     }
 }
@@ -113,19 +122,22 @@ public struct ResolvedAlertRule: Equatable, Sendable {
     public var threshold: Decimal
     public var currency: String?
     public var source: String
+    public var canonicalSource: String
 
     public init(
         severity: AlertSeverity,
         metric: AlertMetricKind,
         threshold: Decimal,
         currency: String?,
-        source: String
+        source: String,
+        canonicalSource: String? = nil
     ) {
         self.severity = severity
         self.metric = metric
         self.threshold = threshold
         self.currency = currency
         self.source = source
+        self.canonicalSource = canonicalSource ?? source
     }
 }
 
@@ -155,7 +167,8 @@ public extension AccountAlertConfig {
                 metric: line.metric,
                 threshold: threshold,
                 currency: nil,
-                source: "公共\(severity == .warning ? "告知" : "警戒")线"
+                source: L10n.f("core.alertLine.545bd1de4c", severity == .warning ? L10n.t("baseInfo.d55a864f5c") : L10n.t("baseInfo.5cb58536e5")),
+                canonicalSource: severity == .warning ? "公共告知线" : "公共警戒线"
             )
         case .custom:
             guard let value = line.value else { return nil }
@@ -164,7 +177,8 @@ public extension AccountAlertConfig {
                 metric: line.metric,
                 threshold: value,
                 currency: line.currency,
-                source: "自定义"
+                source: L10n.t("core.analysisRange.c493338e8c"),
+                canonicalSource: "自定义"
             )
         }
     }
