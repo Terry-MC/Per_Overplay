@@ -55,6 +55,12 @@ struct DashboardView: View {
         .sheet(isPresented: $model.showMessageCenter) {
             MessageCenterView(model: model)
         }
+        .onChange(of: model.debugDeleteAccountId) { _, accountId in
+            guard let accountId,
+                  let account = model.accounts.first(where: { $0.id == accountId }) else { return }
+            deleteAccount = account
+            model.debugDeleteAccountId = nil
+        }
     }
 
     private var header: some View {
@@ -179,7 +185,7 @@ struct DashboardView: View {
     private var content: some View {
         switch model.selectedTab {
         case .overview:
-            OverviewView(
+            BaseInfoView(
                 model: model,
                 onEdit: { editAccount = $0 },
                 onDelete: { deleteAccount = $0 }

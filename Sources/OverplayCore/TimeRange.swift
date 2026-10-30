@@ -9,7 +9,7 @@ public enum AnalysisPreset: Int, CaseIterable, Identifiable {
     public var label: String { "\(rawValue) 天" }
 }
 
-public struct DayRange: Equatable {
+public struct DayRange: Equatable, Sendable {
     public let startDay: String
     public let endDay: String
 
