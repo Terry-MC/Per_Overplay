@@ -329,6 +329,7 @@ private struct ProviderOverviewCard: View {
                     .lineLimit(2)
             }
             Spacer(minLength: 6)
+            accountAlertBadge
             HealthBadge(health: health)
             Button {
                 model.refresh(account: account)
@@ -371,6 +372,28 @@ private struct ProviderOverviewCard: View {
             model.currencyLabel(for: account),
             account.capabilities.summary
         ].joined(separator: " · ")
+    }
+
+    @ViewBuilder
+    private var accountAlertBadge: some View {
+        let unacknowledged = model.alerts.filter {
+            $0.accountId == account.id && !$0.acknowledged
+        }
+        let critical = unacknowledged.contains {
+            [.budgetExceeded, .balanceLow, .credentialInvalid, .syncFailed, .lineCritical].contains($0.kind)
+        }
+        let warning = unacknowledged.contains {
+            [.budgetWarning, .dataStale, .lineWarning].contains($0.kind)
+        }
+        if critical {
+            Label("警戒", systemImage: "exclamationmark.octagon.fill")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.red)
+        } else if warning {
+            Label("告知", systemImage: "exclamationmark.circle.fill")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.orange)
+        }
     }
 
 
