@@ -14,9 +14,9 @@ enum DashboardTab: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .overview: return "总览"
-        case .usage: return "用量"
-        case .quota: return "额度"
+        case .overview: return "基础信息"
+        case .usage: return "用量分析"
+        case .quota: return "额度与预算"
         case .settings: return "设置"
         }
     }
@@ -90,9 +90,12 @@ final class AppModel: ObservableObject {
     @Published private(set) var showOnboarding = false
     @Published private(set) var lastRefreshAllAt: Date?
     @Published var selectedTab: DashboardTab = .overview
-    @Published var selectedPreset: AnalysisPreset = .thirty {
+    @Published var rangePreset: AnalysisRangePreset = .last30Days {
         didSet { validateUsageFilters() }
     }
+    @Published var customRangeStart = Date().addingTimeInterval(-7 * 86_400)
+    @Published var customRangeEnd = Date()
+    @Published var selectedGranularity: AnalysisGranularity = .automatic
     @Published var selectedCurrency: String?
     @Published var usageAccountFilter: String? {
         didSet { validateUsageFilters() }
@@ -108,6 +111,9 @@ final class AppModel: ObservableObject {
         didSet { ensureBalanceCurrencyFilter() }
     }
     @Published var balanceCurrencyFilter: String?
+    @Published var selectedProviderDetailAccountId: String?
+    @Published var providerDetailVisible = false
+    @Published var debugDeleteAccountId: String?
     @Published var showMessageCenter = false
     @Published var hasUnsavedChanges = false
 
@@ -253,7 +259,14 @@ final class AppModel: ObservableObject {
             var newBalances: [String: [String: BalanceSnapshot]] = [:]
             var newHistory: [String: [String: [BalanceSnapshot]]] = [:]
             var newQuotas: [String: QuotaSnapshot] = [:]
-            let historyRange = CalendarDay.range(preset: .ninety, now: now)
+            let retentionStart = Calendar.current.date(byAdding: .day, value: -365, to: now)
+                ?? now.addingTimeInterval(-365 * 86_400)
+            let historyRange = (try? AnalysisRange.make(
+                preset: .custom,
+                customStart: retentionStart,
+                customEnd: now,
+                now: now
+            ))?.dayRange ?? CalendarDay.range(preset: .ninety, now: now)
             for account in loadedAccounts {
                 let latest = try store.latestBalances(accountId: account.id)
                 newBalances[account.id] = latest
@@ -271,7 +284,7 @@ final class AppModel: ObservableObject {
             balances = newBalances
             balanceHistory = newHistory
             quotas = newQuotas
-            let range = CalendarDay.range(preset: .ninety, now: now)
+            let range = historyRange
             let ids = Set(loadedAccounts.map(\.id))
             usageRecords = try store.usage(range: range).filter { ids.contains($0.accountId) }
             if let accountId = overviewAccountFilter,
@@ -370,6 +383,10 @@ final class AppModel: ObservableObject {
             showBanner("该账户已禁用，请先启用", style: .info)
             return
         }
+        if let reason = refreshBlockedReason(for: account) {
+            showBanner(reason, style: .warning)
+            return
+        }
         guard let syncEngine else { return }
         if !syncEngine.startManualRefresh(account: account) {
             showBanner("该账户正在同步中，请等待当前请求结束", style: .info)
@@ -399,6 +416,22 @@ final class AppModel: ObservableObject {
 
     func isSyncing(_ account: Account) -> Bool {
         syncingAccountIds.contains(account.id)
+    }
+
+    func refreshBlockedReason(for account: Account) -> String? {
+        syncEngine?.manualRefreshBlockedReason(accountId: account.id, now: now)
+    }
+
+    func isRefreshCoolingDown(_ account: Account) -> Bool {
+        refreshBlockedReason(for: account) != nil
+    }
+
+    /// 仅用于演示模式截图 / UI 验证，不会发起请求或写入真实数据。
+    func injectDemoRefreshFailure(accountId: String?) {
+        guard isDemo, let accountId,
+              let index = accounts.firstIndex(where: { $0.id == accountId }) else { return }
+        accounts[index].lastError = "演示数据：模拟同步失败（仅用于界面验证，不发起请求）"
+        accounts[index].consecutiveFailures = 1
     }
 
     // MARK: - Account management
@@ -578,17 +611,47 @@ final class AppModel: ObservableObject {
 
     // MARK: - Derived metrics
 
-    var currentRange: DayRange {
-        CalendarDay.range(preset: selectedPreset, now: now)
+    var analysisRange: AnalysisRange {
+        if let range = try? AnalysisRange.make(
+            preset: rangePreset,
+            customStart: customRangeStart,
+            customEnd: customRangeEnd,
+            now: now
+        ) {
+            return range
+        }
+        return AnalysisRange(
+            preset: .last30Days,
+            start: now.addingTimeInterval(-30 * 86_400),
+            end: now,
+            dayRange: CalendarDay.range(preset: .thirty, now: now),
+            isCustom: false
+        )
     }
 
-    func records(for preset: AnalysisPreset) -> [UsageRecord] {
-        let range = CalendarDay.range(preset: preset, now: now)
-        return usageRecords.filter { range.contains($0.day) }
+    var analysisRangeError: AnalysisRangeError? {
+        guard rangePreset == .custom else { return nil }
+        do {
+            _ = try AnalysisRange.make(
+                preset: .custom,
+                customStart: customRangeStart,
+                customEnd: customRangeEnd,
+                now: now
+            )
+            return nil
+        } catch let error as AnalysisRangeError {
+            return error
+        } catch {
+            return nil
+        }
+    }
+
+    var currentRange: DayRange {
+        analysisRange.dayRange
     }
 
     var unfilteredRecords: [UsageRecord] {
-        records(for: selectedPreset)
+        usageRecords.filter { currentRange.contains($0.day) }
     }
 
     var currentRecords: [UsageRecord] {
@@ -688,13 +751,102 @@ final class AppModel: ObservableObject {
     }
 
     var tokenSummary: (total: Int, totalAccounts: Int, providersWithTokens: Int) {
-        let range = CalendarDay.range(preset: .thirty, now: now)
         let stats = DashboardMetrics.tokenStats(
             records: overviewUsageRecords,
-            range: range,
+            range: currentRange,
             totalAccounts: overviewAccountsToShow.count
         )
         return (stats.totalTokens, stats.totalAccounts, stats.accountsWithTokens)
+    }
+
+    var analysisAccounts: [Account] {
+        overviewAccountsToShow
+    }
+
+    var analysisRecords: [UsageRecord] {
+        let ids = Set(analysisAccounts.map(\.id))
+        return unfilteredRecords.filter { ids.contains($0.accountId) }
+    }
+
+    func analysisRecords(for account: Account) -> [UsageRecord] {
+        unfilteredRecords.filter { $0.accountId == account.id }
+    }
+
+    func providerTotals(for account: Account) -> ProviderUsageTotals {
+        ProviderAnalysisMetrics.totals(records: unfilteredRecords, account: account)
+    }
+
+    var analysisProviderTotals: [(account: Account, totals: ProviderUsageTotals)] {
+        analysisAccounts.map { ($0, providerTotals(for: $0)) }
+    }
+
+    var analysisTokenTotal: Int {
+        analysisProviderTotals.reduce(0) { total, item in
+            total + (item.totals.tokensAvailable ? item.totals.totalTokens : 0)
+        }
+    }
+
+    var analysisCosts: [String: Decimal] {
+        var totals: [String: Decimal] = [:]
+        for item in analysisProviderTotals {
+            for (currency, value) in item.totals.costs {
+                totals[currency, default: 0] += value
+            }
+        }
+        return totals
+    }
+
+    var analysisRequestTotal: Int? {
+        let values = analysisProviderTotals.compactMap { item in
+            item.totals.requestsAvailable ? item.totals.requests : nil
+        }
+        return values.isEmpty ? nil : values.reduce(0, +)
+    }
+
+    var analysisTokenCoverage: TokenCoverage {
+        ProviderAnalysisMetrics.coverage(accounts: analysisAccounts, records: analysisRecords)
+    }
+
+    func analysisGranularities(for account: Account) -> [AnalysisGranularity] {
+        AnalysisGranularitySupport.available(
+            for: account.provider,
+            isDemo: isDemo || account.isDemo
+        )
+    }
+
+    func usageSegments(
+        for account: Account,
+        metric: UsageMetric,
+        granularity: AnalysisGranularity
+    ) -> [[UsageChartPoint]] {
+        let effective: AnalysisGranularity = granularity == .automatic ? .day : granularity
+        guard AnalysisChartMath.granuleSupportsUsage(effective) else { return [] }
+        let records = analysisRecords(for: account)
+        let currency = records.compactMap(\.currency).first
+        let values = AnalysisChartMath.dailyValues(
+            records: records,
+            metric: metric,
+            currency: currency
+        )
+        return AnalysisChartMath.segments(
+            days: CalendarDay.days(from: currentRange),
+            values: values,
+            granularity: effective
+        )
+    }
+
+    func balanceChartPoints(
+        for account: Account,
+        granularity: AnalysisGranularity
+    ) -> [BalanceChartPoint] {
+        let snapshots = balanceSnapshots(for: account)
+            .flatMap(\.snapshots)
+            .filter { analysisRange.interval.contains($0.asOf) }
+        let effective: AnalysisGranularity = granularity == .automatic ? .day : granularity
+        return AnalysisChartMath.balancePoints(
+            snapshots: snapshots,
+            granularity: effective
+        )
     }
 
     var officialCreditsRemaining: [String: Decimal] {

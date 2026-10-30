@@ -211,86 +211,77 @@ struct UsageView: View {
     }
 
     private var controls: some View {
-        HStack(spacing: 14) {
-            Picker("范围", selection: $model.selectedPreset) {
-                ForEach(AnalysisPreset.allCases) { preset in
-                    Text(preset.label).tag(preset)
+        VStack(alignment: .leading, spacing: 10) {
+            AnalysisRangeControls(model: model, compact: true)
+            HStack(spacing: 14) {
+                if model.availableCurrencies.count > 1 {
+                    let binding = Binding<String>(
+                        get: { model.effectiveCurrency ?? "" },
+                        set: { model.selectedCurrency = $0 }
+                    )
+                    Picker("币种", selection: binding) {
+                        ForEach(model.availableCurrencies, id: \.self) { code in
+                            Text(code).tag(code)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 110)
+                } else if let currency {
+                    Text("币种 \(currency)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 230)
-            .labelsHidden()
 
-            if model.availableCurrencies.count > 1 {
-                let binding = Binding<String>(
-                    get: { model.effectiveCurrency ?? "" },
-                    set: { model.selectedCurrency = $0 }
-                )
-                Picker("币种", selection: binding) {
-                    ForEach(model.availableCurrencies, id: \.self) { code in
-                        Text(code).tag(code)
+                Picker("账户", selection: $model.usageAccountFilter) {
+                    Text("全部账户").tag(String?.none)
+                    ForEach(model.filterAccounts, id: \.id) { account in
+                        Text(account.name).tag(Optional(account.id))
                     }
                 }
                 .pickerStyle(.menu)
-                .frame(width: 110)
-            } else if let currency {
-                Text("币种 \(currency)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+                .frame(width: 145)
 
-            Text(model.currentRange.label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Picker("账户", selection: $model.usageAccountFilter) {
-                Text("全部账户").tag(String?.none)
-                ForEach(model.filterAccounts, id: \.id) { account in
-                    Text(account.name).tag(Optional(account.id))
+                Picker("模型", selection: $model.usageModelFilter) {
+                    Text("全部模型").tag(String?.none)
+                    ForEach(model.filterModels, id: \.self) { model in
+                        Text(model).tag(Optional(model))
+                    }
                 }
-            }
-            .pickerStyle(.menu)
-            .frame(width: 145)
+                .pickerStyle(.menu)
+                .frame(width: 180)
 
-            Picker("模型", selection: $model.usageModelFilter) {
-                Text("全部模型").tag(String?.none)
-                ForEach(model.filterModels, id: \.self) { model in
-                    Text(model).tag(Optional(model))
+                if model.hasUsageFilters {
+                    Button {
+                        model.resetUsageFilters()
+                    } label: {
+                        Image(systemName: "xmark.circle")
+                    }
+                    .buttonStyle(.plain)
+                    .help("清除账户 / 模型筛选")
                 }
-            }
-            .pickerStyle(.menu)
-            .frame(width: 180)
 
-            if model.hasUsageFilters {
+                Spacer()
+
                 Button {
-                    model.resetUsageFilters()
+                    exportCSV()
                 } label: {
-                    Image(systemName: "xmark.circle")
+                    Label("导出 CSV", systemImage: "square.and.arrow.up")
                 }
-                .buttonStyle(.plain)
-                .help("清除账户 / 模型筛选")
+                .disabled(records.isEmpty)
             }
 
-            Spacer()
-
-            Button {
-                exportCSV()
-            } label: {
-                Label("导出 CSV", systemImage: "square.and.arrow.up")
-            }
-            .disabled(records.isEmpty)
-        }
-        .overlay(alignment: .bottomLeading) {
-            if model.selectedPreset == .ninety {
+            if rangeExceedsThirtyDays {
                 Text(model.isDemo
-                    ? "演示数据仅覆盖最近 30 个完整 UTC 日，超出窗口的日期不会显示，也不会绘制 0；汇总卡显示空状态与原因。"
-                    : "OpenRouter 仅提供最近约 30 个 UTC 日，超出窗口的日期不会显示，也不会绘制 0；汇总卡显示空状态与原因。")
+                    ? "演示数据仅覆盖最近 30 个完整 UTC 日；超出窗口的日期留空，不绘制 0。"
+                    : "OpenRouter 仅提供最近约 30 个 UTC 日；超出窗口的日期留空，不绘制 0。")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .offset(y: 16)
             }
         }
-        .padding(.bottom, model.selectedPreset == .ninety ? 14 : 0)
+    }
+
+    private var rangeExceedsThirtyDays: Bool {
+        CalendarDay.days(from: model.currentRange).count > 30
     }
 
     private var summaryCards: some View {

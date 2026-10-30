@@ -175,4 +175,48 @@ final class SyncEngineTests: XCTestCase {
         let updated = try store.account(id: account.id)
         XCTAssertFalse(updated?.lastError?.contains(secret) ?? true)
     }
+
+    func testRateLimitSetsManualRefreshCooldown() async throws {
+        let engine = makeEngine(FakeHTTPTransport([
+            response(429, headers: ["Retry-After": "120"])
+        ]))
+        let outcome = await engine.refresh(account: account, now: now)
+        XCTAssertEqual(outcome?.status, .rateLimited)
+        XCTAssertNotNil(engine.manualRefreshBlockedReason(
+            accountId: account.id,
+            now: now.addingTimeInterval(1)
+        ))
+        XCTAssertFalse(engine.startManualRefresh(
+            account: account,
+            now: now.addingTimeInterval(1)
+        ))
+        XCTAssertNil(engine.manualRefreshBlockedReason(
+            accountId: account.id,
+            now: now.addingTimeInterval(121)
+        ))
+    }
+
+    func testRefreshFailureKeepsOtherAccountData() async throws {
+        let other = try store.insertTestAccount(provider: .deepseek, name: "Other")
+        try keychain.setCredential("sk-other", accountId: other.id)
+        try store.insertBalanceSnapshots([
+            BalanceSnapshot(
+                accountId: other.id,
+                currency: "CNY",
+                total: 42,
+                asOf: now.addingTimeInterval(-60),
+                source: "test"
+            )
+        ])
+
+        let engine = makeEngine(FakeHTTPTransport([response(500)]))
+        let outcome = await engine.refresh(account: account, now: now)
+        XCTAssertEqual(outcome?.status, .failed)
+        XCTAssertEqual(
+            try store.balanceSnapshots(accountId: other.id, currency: "CNY").first?.total,
+            Decimal(42)
+        )
+        XCTAssertEqual(try store.account(id: other.id)?.consecutiveFailures, 0)
+        XCTAssertNil(try store.account(id: other.id)?.lastError)
+    }
 }

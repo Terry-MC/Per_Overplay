@@ -27,6 +27,7 @@ public final class SyncEngine {
     private let lock = NSLock()
     private var inFlight: Set<String> = []
     private var nextDue: [String: Date] = [:]
+    private var manualCooldownUntil: [String: Date] = [:]
     private var tasks: [String: Task<Void, Never>] = [:]
     private var cancelled = false
     private var settings: AppSettings
@@ -117,9 +118,20 @@ public final class SyncEngine {
         }
     }
 
+    public func manualRefreshBlockedReason(accountId: String, now: Date = Date()) -> String? {
+        withLock {
+            guard let until = manualCooldownUntil[accountId], until > now else { return nil }
+            let seconds = max(1, Int(until.timeIntervalSince(now).rounded(.up)))
+            return "厂商请求受限，请在 \(seconds) 秒后重试"
+        }
+    }
+
     @discardableResult
     public func startManualRefresh(account: Account, now: Date = Date()) -> Bool {
-        enqueue(account: account, trigger: .manual, now: now)
+        if manualRefreshBlockedReason(accountId: account.id, now: now) != nil {
+            return false
+        }
+        return enqueue(account: account, trigger: .manual, now: now)
     }
 
     @discardableResult
@@ -374,18 +386,22 @@ public final class SyncEngine {
             let interval = settings.refreshInterval
             switch outcome.status {
             case .success:
+                manualCooldownUntil.removeValue(forKey: accountId)
                 nextDue[accountId] = now.addingTimeInterval(interval)
             case .partial:
                 if let retryAfter = outcome.retryAfter {
-                    nextDue[accountId] = now.addingTimeInterval(min(max(retryAfter, 60), 3600))
+                    let delay = min(max(retryAfter, 60), 3600)
+                    nextDue[accountId] = now.addingTimeInterval(delay)
+                    manualCooldownUntil[accountId] = now.addingTimeInterval(delay)
                 } else {
                     nextDue[accountId] = now.addingTimeInterval(interval)
                 }
             case .invalidCredential:
                 nextDue[accountId] = .distantFuture
             case .rateLimited:
-                let delay = max(outcome.retryAfter ?? 60, 60)
-                nextDue[accountId] = now.addingTimeInterval(min(delay, 3600))
+                let delay = min(max(outcome.retryAfter ?? 60, 60), 3600)
+                nextDue[accountId] = now.addingTimeInterval(delay)
+                manualCooldownUntil[accountId] = now.addingTimeInterval(delay)
             case .failed:
                 let failures = (try? store.account(id: accountId))?.consecutiveFailures ?? 1
                 let exponent = min(Double(max(failures - 1, 0)), 10)

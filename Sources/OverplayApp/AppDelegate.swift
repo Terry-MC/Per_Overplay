@@ -23,6 +23,9 @@ struct LaunchOptions {
     var suppressToasts = false
     var switchSmoke = false
     var collapseFloating = false
+    var detailAccountId: String?
+    var deleteSheetAccountId: String?
+    var demoErrorAccountId: String?
     var autoQuitAfter: Double?
 
     static func parse(_ arguments: [String]) -> LaunchOptions {
@@ -78,6 +81,15 @@ struct LaunchOptions {
                 options.switchSmoke = true
             case "--collapse-floating":
                 options.collapseFloating = true
+            case "--detail-account" where index + 1 < arguments.count:
+                index += 1
+                options.detailAccountId = arguments[index]
+            case "--delete-sheet" where index + 1 < arguments.count:
+                index += 1
+                options.deleteSheetAccountId = arguments[index]
+            case "--demo-error-account" where index + 1 < arguments.count:
+                index += 1
+                options.demoErrorAccountId = arguments[index]
             case "--auto-quit-after" where index + 1 < arguments.count:
                 index += 1
                 options.autoQuitAfter = Double(arguments[index])
@@ -188,6 +200,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             windowController.setContentSize(width: 1280, height: height)
         } else if isSnapshotMode {
             windowController.setContentSize(width: 1280, height: 800)
+        }
+        if let demoErrorAccountId = options.demoErrorAccountId {
+            model.injectDemoRefreshFailure(accountId: demoErrorAccountId)
+        }
+        if let detailAccountId = options.detailAccountId {
+            showMainWindow(tab: .overview)
+            model.selectedProviderDetailAccountId = detailAccountId
+        }
+        if let deleteSheetAccountId = options.deleteSheetAccountId {
+            showMainWindow(tab: .overview)
+            model.debugDeleteAccountId = deleteSheetAccountId
         }
 
         if options.showMessages {
@@ -401,6 +424,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         checks.append(("densityChanged", floatingController.density != initialDensity))
         floatingController.toggleDensity()
         checks.append(("densityRestored", floatingController.density == initialDensity))
+
+        showMainWindow(tab: .usage)
+        checks.append(("tabUsageSelected", model.selectedTab == .usage))
+        model.selectedTab = .quota
+        checks.append(("tabQuotaSelected", model.selectedTab == .quota))
+        model.selectedTab = .settings
+        checks.append(("tabSettingsSelected", model.selectedTab == .settings))
+        model.selectedTab = .overview
+        checks.append(("tabBaseInfoSelected", model.selectedTab == .overview))
+        if let firstAccount = model.accounts.first {
+            model.selectedProviderDetailAccountId = firstAccount.id
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            checks.append(("providerDetailOpened", model.providerDetailVisible))
+            model.selectedProviderDetailAccountId = nil
+            try? await Task.sleep(nanoseconds: 500_000_000)
+        }
+        showFloatingWindow()
 
         statusBarController.openMenuPanel()
         try? await Task.sleep(nanoseconds: 400_000_000)

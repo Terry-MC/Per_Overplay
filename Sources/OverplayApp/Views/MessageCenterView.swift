@@ -1,7 +1,7 @@
 import SwiftUI
 import OverplayCore
 
-/// 消息中心面板：从顶部消息或总览进入，不占用独立 Tab。
+/// 消息中心面板：从顶部消息或基础信息进入，不占用独立 Tab。
 struct MessageCenterView: View {
     @ObservedObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
