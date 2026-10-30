@@ -128,6 +128,7 @@ final class AppModel: ObservableObject {
     @Published var providerDetailVisible = false
     @Published var providerFormResetToken = UUID()
     @Published var debugDeleteAccountId: String?
+    @Published var debugAlertLineAccountId: String?
     @Published var showMessageCenter = false
     @Published var hasUnsavedChanges = false
 

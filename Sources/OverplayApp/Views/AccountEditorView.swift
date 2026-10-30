@@ -36,12 +36,12 @@ struct AccountEditorView: View {
             _provider = State(initialValue: .deepseek)
             _name = State(initialValue: "")
             _officialName = State(initialValue: "")
-            _iconName = State(initialValue: AccountIconCatalog.options[0])
+            _iconName = State(initialValue: "")
         case .edit(let account):
             _provider = State(initialValue: account.provider)
             _name = State(initialValue: account.name)
             _officialName = State(initialValue: account.officialName ?? "")
-            _iconName = State(initialValue: account.iconName ?? AccountIconCatalog.options[0])
+            _iconName = State(initialValue: account.iconName ?? "")
         }
     }
 
@@ -105,7 +105,7 @@ struct AccountEditorView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("图标").font(.headline)
                             Picker("图标", selection: $iconName) {
-                                Text("默认图标").tag("")
+                                Text("默认（厂商图标）").tag("")
                                 ForEach(AccountIconCatalog.options, id: \.self) { icon in
                                     Label(icon, systemImage: icon).tag(icon)
                                 }

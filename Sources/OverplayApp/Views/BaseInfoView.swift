@@ -170,20 +170,24 @@ struct BaseInfoView: View {
         let presentProviders = ProviderKind.allCases.filter { provider in
             model.accounts.contains { $0.provider == provider }
         }
-        return HStack(spacing: 10) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    platformButton(nil, title: "All", symbol: "square.grid.2x2")
-                    ForEach(presentProviders) { provider in
-                        platformButton(for: provider)
-                    }
+        return VStack(alignment: .leading, spacing: 6) {
+            FlowLayout(spacing: 6, lineSpacing: 6) {
+                platformButton(nil, title: "All", symbol: "square.grid.2x2")
+                ForEach(presentProviders) { provider in
+                    platformButton(for: provider)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Text(model.overviewPlatformFilter.map { "仅显示 \($0.displayName)" } ?? "全部 AI 平台")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize()
+            HStack(spacing: 8) {
+                Text(model.overviewPlatformFilter.map { "仅显示 \($0.displayName)" } ?? "全部 AI 平台")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if presentProviders.count > 3 {
+                    Label("窗口较窄时平台标签自动换行", systemImage: "arrow.turn.down.left")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
         }
         .padding(6)
         .background(
@@ -202,12 +206,10 @@ struct BaseInfoView: View {
     }
 
     private func accountFilterChips(platform: ProviderKind) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                accountChip(nil, title: "全部 \(platform.displayName) 账户")
-                ForEach(model.overviewPlatformAccounts) { account in
-                    accountChip(account.id, title: account.displayName)
-                }
+        FlowLayout(spacing: 6, lineSpacing: 6) {
+            accountChip(nil, title: "全部 \(platform.displayName) 账户")
+            ForEach(model.overviewPlatformAccounts) { account in
+                accountChip(account.id, title: account.displayName)
             }
         }
     }
@@ -243,7 +245,16 @@ struct BaseInfoView: View {
             model.overviewPlatformFilter = platform
         } label: {
             HStack(spacing: 6) {
-                if let symbol {
+                if let platform, let brandIcon = BrandIconCatalog.image(for: platform) {
+                    Image(nsImage: brandIcon)
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                        .frame(width: 16, height: 16)
+                        .padding(3)
+                        .background(Circle().fill(Color.white.opacity(0.94)))
+                        .overlay(Circle().stroke(Color.black.opacity(0.08), lineWidth: 0.5))
+                } else if let symbol {
                     Image(systemName: symbol)
                         .font(.caption)
                 } else if let letter {

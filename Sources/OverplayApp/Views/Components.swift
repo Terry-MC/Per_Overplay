@@ -195,6 +195,39 @@ enum AccountIconCatalog {
     }
 }
 
+enum BrandIconCatalog {
+    private static let fileNames: [ProviderKind: String] = [
+        .deepseek: "brand-deepseek",
+        .openrouter: "brand-openrouter",
+        .kimi: "brand-kimi",
+        .glm: "brand-glm",
+        .minimax: "brand-minimax",
+        .qwen: "brand-qwen",
+        .seed: "brand-seed",
+        .hunyuan: "brand-hunyuan",
+        .openai: "brand-openai",
+        .anthropic: "brand-anthropic",
+        .gemini: "brand-gemini",
+        .meta: "brand-meta",
+        .xai: "brand-xai",
+        .mistral: "brand-mistral"
+    ]
+
+    private static let images: [ProviderKind: NSImage] = {
+        var result: [ProviderKind: NSImage] = [:]
+        for (provider, name) in fileNames {
+            guard let url = Bundle.module.url(forResource: name, withExtension: "png"),
+                  let image = NSImage(contentsOf: url) else { continue }
+            result[provider] = image
+        }
+        return result
+    }()
+
+    static func image(for provider: ProviderKind) -> NSImage? {
+        images[provider]
+    }
+}
+
 struct ProviderMark: View {
     var provider: ProviderKind
     var iconName: String?
@@ -206,22 +239,85 @@ struct ProviderMark: View {
 
     var body: some View {
         let style = providerStyle(for: provider)
-        let icon = AccountIconCatalog.normalized(iconName)
+        let customIcon = AccountIconCatalog.normalized(iconName)
+        let brandIcon = customIcon == nil ? BrandIconCatalog.image(for: provider) : nil
         RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .fill(style.color.opacity(0.16))
+            .fill(brandIcon == nil ? style.color.opacity(0.16) : Color.white.opacity(0.96))
             .frame(width: 34, height: 34)
             .overlay {
-                if let icon {
-                    Image(systemName: icon)
+                if let customIcon {
+                    Image(systemName: customIcon)
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(style.color)
+                } else if let brandIcon {
+                    Image(nsImage: brandIcon)
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                        .frame(width: 21, height: 21)
                 } else {
                     Text(style.abbreviation)
                         .font(style.abbreviation.count > 1 ? .caption.weight(.bold) : .headline.weight(.bold))
                         .foregroundStyle(style.color)
                 }
             }
+            .overlay {
+                if brandIcon != nil {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .stroke(Color.black.opacity(0.10), lineWidth: 1)
+                }
+            }
             .accessibilityLabel(provider.displayName)
+    }
+}
+
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+    var lineSpacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var rowWidth: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var totalHeight: CGFloat = 0
+        var widestRow: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if rowWidth > 0, rowWidth + spacing + size.width > maxWidth {
+                widestRow = max(widestRow, rowWidth)
+                totalHeight += rowHeight + lineSpacing
+                rowWidth = size.width
+                rowHeight = size.height
+            } else {
+                rowWidth += (rowWidth > 0 ? spacing : 0) + size.width
+                rowHeight = max(rowHeight, size.height)
+            }
+        }
+        widestRow = max(widestRow, rowWidth)
+        totalHeight += rowHeight
+        let width = maxWidth.isFinite ? min(widestRow, maxWidth) : widestRow
+        return CGSize(width: width, height: totalHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + lineSpacing
+                rowHeight = 0
+            }
+            subview.place(
+                at: CGPoint(x: x, y: y),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: size.width, height: size.height)
+            )
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
     }
 }
 
