@@ -402,6 +402,19 @@ public struct AlertEvent: Identifiable, Equatable {
         self.acknowledged = acknowledged
         self.isDemo = isDemo
     }
+
+    /// 稳定模版 key + 参数，供后续多语言重渲染；数据本身仍保存在既有列中。
+    public var templateKey: String { "alert.\(kind.rawValue)" }
+
+    public var params: [String: String] {
+        [
+            "accountName": accountName,
+            "value": value,
+            "threshold": threshold,
+            "metric": metric,
+            "periodKey": periodKey
+        ]
+    }
 }
 
 public struct AlertState: Equatable {
