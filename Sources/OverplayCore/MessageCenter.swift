@@ -4,6 +4,7 @@ public enum MessageTypeFilter: String, CaseIterable, Identifiable, Sendable {
     case all
     case budget
     case balance
+    case threshold
     case sync
     case credential
     case stale
@@ -15,6 +16,7 @@ public enum MessageTypeFilter: String, CaseIterable, Identifiable, Sendable {
         case .all: return "全部类型"
         case .budget: return "预算"
         case .balance: return "余额"
+        case .threshold: return "告警线"
         case .sync: return "同步失败"
         case .credential: return "凭据"
         case .stale: return "数据过期"
@@ -26,6 +28,7 @@ public enum MessageTypeFilter: String, CaseIterable, Identifiable, Sendable {
         case .all: return true
         case .budget: return kind == .budgetWarning || kind == .budgetExceeded
         case .balance: return kind == .balanceLow
+        case .threshold: return kind == .lineWarning || kind == .lineCritical
         case .sync: return kind == .syncFailed
         case .credential: return kind == .credentialInvalid
         case .stale: return kind == .dataStale

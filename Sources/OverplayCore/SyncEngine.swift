@@ -159,7 +159,7 @@ public final class SyncEngine {
             return outcome
         }
 
-        let connector = ConnectorFactory.make(for: account.provider, transport: transport)
+        let connector = ConnectorFactory.make(for: account, transport: transport)
         let outcome = await connector.sync(account: account, credential: credential, now: now)
         if Task.isCancelled || withLock({ cancelled }) {
             try? store.finishSyncRun(id: runId, status: "cancelled", error: nil, at: Date())
@@ -194,7 +194,7 @@ public final class SyncEngine {
                 return (try? store.latestBalances(accountId: account.id))?[threshold.currency]
             }()
             let monthSpend: Decimal? = {
-                guard let budget = account.budget, providerSupportsBudget(account.provider) else { return nil }
+                guard let budget = account.budget, providerSupportsBudget(account) else { return nil }
                 return try? store.monthSpend(accountId: account.id, currency: budget.currency, now: now)
             }()
             let usageFresh = isUsageFresh(account: account, settings: settings, now: now)
@@ -217,7 +217,14 @@ public final class SyncEngine {
                 createdAt: account.createdAt,
                 refreshInterval: settings.refreshInterval,
                 usageIsFresh: usageFresh,
-                now: now
+                now: now,
+                alertConfig: account.alertConfig,
+                publicAlertConfig: settings.publicAlertConfig,
+                latestQuota: latestQuota(accountId: account.id),
+                quotaIsFresh: usageFresh,
+                latestBalances: alertBalances(accountId: account.id),
+                monthTokens: monthTokenTotal(accountId: account.id, now: now),
+                tokenUsageIsFresh: usageFresh
             )
             if let events = try? alertEngine.evaluate(snapshot), !events.isEmpty {
                 all.append(contentsOf: events)
@@ -331,7 +338,7 @@ public final class SyncEngine {
             return (try? store.latestBalances(accountId: account.id))?[threshold.currency]
         }()
         let monthSpend: Decimal? = {
-            guard let budget = account.budget, providerSupportsBudget(account.provider) else { return nil }
+            guard let budget = account.budget, providerSupportsBudget(account) else { return nil }
             return try? store.monthSpend(accountId: account.id, currency: budget.currency, now: now)
         }()
         let usageFresh = outcome.status == .success
@@ -356,11 +363,35 @@ public final class SyncEngine {
             createdAt: account.createdAt,
             refreshInterval: currentSettings.refreshInterval,
             usageIsFresh: usageFresh,
-            now: now
+            now: now,
+            alertConfig: account.alertConfig,
+            publicAlertConfig: currentSettings.publicAlertConfig,
+            latestQuota: latestQuota(accountId: account.id),
+            quotaIsFresh: usageFresh,
+            latestBalances: alertBalances(accountId: account.id),
+            monthTokens: monthTokenTotal(accountId: account.id, now: now),
+            tokenUsageIsFresh: usageFresh
         )
         if let events = try? alertEngine.evaluate(snapshot), !events.isEmpty {
             emit(.alerts(events))
         }
+    }
+
+    private func latestQuota(accountId: String) -> QuotaSnapshot? {
+        try? store.latestQuota(accountId: accountId)
+    }
+
+    private func alertBalances(accountId: String) -> [BalanceSnapshot] {
+        guard let balances = try? store.latestBalances(accountId: accountId) else { return [] }
+        return balances.values.sorted { $0.currency < $1.currency }
+    }
+
+    private func monthTokenTotal(accountId: String, now: Date) -> Int? {
+        let (_, range) = CalendarDay.monthRange(now: now)
+        let records = (try? store.usage(accountId: accountId, range: range)) ?? []
+        let tokenRecords = records.filter { $0.promptTokens != nil || $0.completionTokens != nil }
+        guard !tokenRecords.isEmpty else { return nil }
+        return tokenRecords.reduce(0) { $0 + ($1.totalTokens ?? 0) }
     }
 
     @discardableResult
@@ -424,8 +455,8 @@ public final class SyncEngine {
         return true
     }
 
-    private func providerSupportsBudget(_ provider: ProviderKind) -> Bool {
-        provider.capabilities.usage
+    private func providerSupportsBudget(_ account: Account) -> Bool {
+        account.capabilities.usage
     }
 
     private func missingCredentialOutcome(account: Account) -> SyncOutcome {

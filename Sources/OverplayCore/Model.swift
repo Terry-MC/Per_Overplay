@@ -3,6 +3,7 @@ import Foundation
 public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case deepseek
     case openrouter
+    case genericHTTP
     case kimi
     case glm
     case minimax
@@ -21,13 +22,14 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
     public var id: String { rawValue }
 
     public var supportsRealConnection: Bool {
-        Self.realAccountProviders.contains(self)
+        self == .genericHTTP || Self.realAccountProviders.contains(self)
     }
 
     public var displayName: String {
         switch self {
         case .deepseek: return "DeepSeek"
         case .openrouter: return "OpenRouter"
+        case .genericHTTP: return "通用 HTTP"
         case .kimi: return "Kimi"
         case .glm: return "GLM"
         case .minimax: return "MiniMax"
@@ -47,7 +49,7 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
         switch self {
         case .deepseek, .kimi, .glm, .minimax, .qwen, .seed, .hunyuan:
             return "CNY"
-        case .openrouter, .openai, .anthropic, .gemini, .meta, .xai, .mistral:
+        case .openrouter, .genericHTTP, .openai, .anthropic, .gemini, .meta, .xai, .mistral:
             return "USD"
         }
     }
@@ -69,6 +71,14 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
                 cost: true,
                 credits: true,
                 note: "需 Management Key；用量窗口约 30 天（UTC 日桶）"
+            )
+        case .genericHTTP:
+            return ProviderCapabilities(
+                balance: false,
+                usage: false,
+                cost: false,
+                credits: false,
+                note: "通用 HTTP · 能力由字段映射决定"
             )
         default:
             return ProviderCapabilities(
@@ -136,6 +146,10 @@ public struct Account: Identifiable, Equatable {
     public var budget: Budget?
     public var balanceThreshold: BalanceThreshold?
     public var isDemo: Bool
+    public var officialName: String?
+    public var iconName: String?
+    public var genericConfig: GenericHTTPConfig?
+    public var alertConfig: AccountAlertConfig?
 
     public init(
         id: String = UUID().uuidString,
@@ -150,7 +164,11 @@ public struct Account: Identifiable, Equatable {
         lastError: String? = nil,
         budget: Budget? = nil,
         balanceThreshold: BalanceThreshold? = nil,
-        isDemo: Bool = false
+        isDemo: Bool = false,
+        officialName: String? = nil,
+        iconName: String? = nil,
+        genericConfig: GenericHTTPConfig? = nil,
+        alertConfig: AccountAlertConfig? = nil
     ) {
         self.id = id
         self.provider = provider
@@ -165,6 +183,10 @@ public struct Account: Identifiable, Equatable {
         self.budget = budget
         self.balanceThreshold = balanceThreshold
         self.isDemo = isDemo
+        self.officialName = officialName
+        self.iconName = iconName
+        self.genericConfig = genericConfig
+        self.alertConfig = alertConfig
     }
 
     public var displayName: String {
@@ -174,7 +196,12 @@ public struct Account: Identifiable, Equatable {
     }
 
 
-    public var capabilities: ProviderCapabilities { provider.capabilities }
+    public var capabilities: ProviderCapabilities {
+        if provider == .genericHTTP, let genericConfig {
+            return genericConfig.capabilities
+        }
+        return provider.capabilities
+    }
 }
 
 public struct UsageRecord: Identifiable, Equatable {
@@ -320,6 +347,8 @@ public enum AlertKind: String, Codable, CaseIterable {
     case syncFailed
     case credentialInvalid
     case dataStale
+    case lineWarning
+    case lineCritical
 
     public var title: String {
         switch self {
@@ -329,6 +358,8 @@ public enum AlertKind: String, Codable, CaseIterable {
         case .syncFailed: return "连续同步失败"
         case .credentialInvalid: return "凭据失效"
         case .dataStale: return "数据已过期"
+        case .lineWarning: return "告知线触发"
+        case .lineCritical: return "警戒线触发"
         }
     }
 }
@@ -390,10 +421,16 @@ public struct AlertState: Equatable {
 public struct AppSettings: Equatable {
     public var refreshIntervalMinutes: Int
     public var notificationsEnabled: Bool
+    public var publicAlertConfig: PublicAlertConfig
 
-    public init(refreshIntervalMinutes: Int = 15, notificationsEnabled: Bool = true) {
+    public init(
+        refreshIntervalMinutes: Int = 15,
+        notificationsEnabled: Bool = true,
+        publicAlertConfig: PublicAlertConfig = PublicAlertConfig()
+    ) {
         self.refreshIntervalMinutes = refreshIntervalMinutes
         self.notificationsEnabled = notificationsEnabled
+        self.publicAlertConfig = publicAlertConfig
     }
 
     public var refreshInterval: TimeInterval {

@@ -166,6 +166,7 @@ func providerStyle(for provider: ProviderKind) -> ProviderStyle {
     switch provider {
     case .deepseek: return ProviderStyle(abbreviation: "D", color: .blue)
     case .openrouter: return ProviderStyle(abbreviation: "O", color: .purple)
+    case .genericHTTP: return ProviderStyle(abbreviation: "HTTP", color: .gray)
     case .kimi: return ProviderStyle(abbreviation: "K", color: .teal)
     case .glm: return ProviderStyle(abbreviation: "G", color: .cyan)
     case .minimax: return ProviderStyle(abbreviation: "MM", color: .orange)
@@ -471,19 +472,23 @@ enum AppPanels {
     }
 
     static func confirmQuit(model: AppModel) {
-        guard model.hasUnsavedChanges else {
-            NSApp.terminate(nil)
-            return
-        }
+        _ = model
+        NSApp.terminate(nil)
+    }
+
+    static func confirmDiscardUnsaved(model: AppModel, action: String) -> Bool {
+        guard model.hasUnsavedChanges else { return true }
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "有未保存的内容，仍要退出 Overplay？"
-        alert.informativeText = "退出将停止定时刷新、取消进行中的请求并关闭窗口。已保存的数据不会丢失；未保存的表单或设置将不会被保留。"
-        alert.addButton(withTitle: "退出")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = "有未保存的新增厂商表单，仍要\(action)？"
+        alert.informativeText = "继续将丢弃表单内容；已保存的账户和设置不会受影响。"
+        alert.addButton(withTitle: "放弃修改")
+        alert.addButton(withTitle: "返回")
         if alert.runModal() == .alertFirstButtonReturn {
-            NSApp.terminate(nil)
+            model.hasUnsavedChanges = false
+            return true
         }
+        return false
     }
 
     static func errorAlert(title: String, message: String) {
@@ -533,9 +538,9 @@ struct AlertRowView: View {
 
     private var color: Color {
         switch alert.kind {
-        case .budgetExceeded, .credentialInvalid, .syncFailed:
+        case .budgetExceeded, .credentialInvalid, .syncFailed, .lineCritical:
             return .red
-        case .budgetWarning, .balanceLow:
+        case .budgetWarning, .balanceLow, .lineWarning:
             return .orange
         case .dataStale:
             return .yellow
@@ -544,8 +549,8 @@ struct AlertRowView: View {
 
     private var symbol: String {
         switch alert.kind {
-        case .budgetWarning: return "chart.pie.fill"
-        case .budgetExceeded: return "exclamationmark.octagon.fill"
+        case .budgetWarning, .lineWarning: return "chart.pie.fill"
+        case .budgetExceeded, .lineCritical: return "exclamationmark.octagon.fill"
         case .balanceLow: return "creditcard.trianglebadge.exclamationmark"
         case .syncFailed: return "arrow.triangle.2.circlepath.circle.fill"
         case .credentialInvalid: return "key.slash.fill"

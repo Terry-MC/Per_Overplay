@@ -109,6 +109,9 @@ struct ProviderDetailView: View {
     private var sourceDescription: String {
         if account.provider == .deepseek { return "DeepSeek 官方余额快照（非逐请求 token）" }
         if account.provider == .openrouter { return "OpenRouter activity（约 30 天 UTC 日桶）" }
+        if account.provider == .genericHTTP {
+            return "通用 HTTP · GET \(account.genericConfig?.endpointPath ?? "/")"
+        }
         if account.isDemo || model.isDemo { return "演示数据（不联网）" }
         return "\(account.provider.displayName) 官方只读接口"
     }
@@ -119,7 +122,7 @@ struct ProviderDetailView: View {
 
     @ViewBuilder
     private var summary: some View {
-        if account.provider.capabilities.balance && !account.provider.capabilities.usage {
+        if account.capabilities.balance && !account.capabilities.usage {
             balanceSummary
         } else {
             usageSummary
@@ -257,9 +260,9 @@ struct ProviderDetailView: View {
 
     @ViewBuilder
     private var chartSection: some View {
-        if account.provider.capabilities.balance && !account.provider.capabilities.usage {
+        if account.capabilities.balance && !account.capabilities.usage {
             balanceChart
-        } else if account.provider.capabilities.usage {
+        } else if account.capabilities.usage {
             usageChart
         } else {
             SectionCard(title: "厂商详情", isDemo: model.isDemo) {
@@ -487,6 +490,9 @@ struct ProviderDetailView: View {
         }
         if account.provider == .openrouter {
             return "OpenRouter：用量窗口约 30 天（UTC 日桶）；BYOK 与 credits 分开统计；官方无余额。"
+        }
+        if account.provider == .genericHTTP {
+            return "通用 HTTP：仅展示已映射并在响应中命中的字段；未配置指标不推断。"
         }
         if account.provider == .gemini {
             return "Gemini：真实 AI Studio 接口不提供逐 Key 用量 / 费用；本页演示平台数据仅用于功能展示。未配置指标不推断。"

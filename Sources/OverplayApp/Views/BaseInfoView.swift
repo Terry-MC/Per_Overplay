@@ -373,6 +373,7 @@ private struct ProviderOverviewCard: View {
         ].joined(separator: " · ")
     }
 
+
     private var refreshHelp: String {
         if let reason = model.refreshBlockedReason(for: account) { return reason }
         if model.isSyncing(account) { return "正在同步该账户" }
@@ -504,7 +505,7 @@ private struct ProviderOverviewCard: View {
                     }
                     ProgressView(value: min(max(NSDecimalNumber(decimal: percent).doubleValue / 100, 0), 1))
                         .tint(.blue)
-                    Text("中性使用率；告警线由 issue-005 配置，未启用时不显示告知 / 警戒标记。")
+                    Text("中性使用率；告警线在“新增厂商”页按账户配置，未启用时不显示告知 / 警戒标记。")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
@@ -516,19 +517,55 @@ private struct ProviderOverviewCard: View {
     private var progressSection: some View {
         if forceUnavailable {
             EmptyView()
-        } else if let budget = account.budget, let ratio = model.budgetRatio(for: account) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("本地预算使用率（本机自然月）").font(.caption2).foregroundStyle(.secondary)
-                    Spacer()
-                    Text(Money.percent(ratio)).font(.caption.weight(.semibold))
+        } else {
+            if let budget = account.budget, let ratio = model.budgetRatio(for: account) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("本地预算使用率（本机自然月）").font(.caption2).foregroundStyle(.secondary)
+                        Spacer()
+                        Text(Money.percent(ratio)).font(.caption.weight(.semibold))
+                    }
+                    ProgressView(value: min(max(NSDecimalNumber(decimal: ratio).doubleValue / 100, 0), 1))
+                        .tint(.blue)
+                    Text("预算 \(Money.formatBalance(budget.amount, currency: budget.currency)) · 与官方额度分开。")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                 }
-                ProgressView(value: min(max(NSDecimalNumber(decimal: ratio).doubleValue / 100, 0), 1))
-                    .tint(.blue)
-                Text("预算 \(Money.formatBalance(budget.amount, currency: budget.currency)) · 与官方额度分开；告警配置由 issue-005 交付。")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
             }
+            alertRuleSummary
+        }
+    }
+
+    @ViewBuilder
+    private var alertRuleSummary: some View {
+        if account.alertConfig == nil {
+            if account.budget != nil || account.balanceThreshold != nil {
+                Text("旧阈值兼容：预算 80% / 100%\(account.balanceThreshold.map { " · 余额 \(Money.formatBalance($0.amount, currency: $0.currency))" } ?? "")；新告警线默认关闭。")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            let rules = (account.alertConfig ?? .off).resolved(public: model.settings.publicAlertConfig)
+            if !rules.isEmpty {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(rules.enumerated()), id: \.offset) { _, rule in
+                        Text("\(rule.severity == .warning ? "告知线" : "警戒线")：\(rule.metric.label) \(thresholdText(rule)) · \(rule.source)")
+                            .font(.caption2)
+                            .foregroundStyle(rule.severity == .warning ? .orange : .red)
+                    }
+                }
+            }
+        }
+    }
+
+    private func thresholdText(_ rule: ResolvedAlertRule) -> String {
+        switch rule.metric {
+        case .budgetPercent, .quotaPercent:
+            return Money.percent(rule.threshold)
+        case .balanceAbsolute:
+            return "≤ \(Money.formatBalance(rule.threshold, currency: rule.currency ?? account.provider.defaultCurrency))"
+        case .tokenAbsolute:
+            return "≥ \(Money.formatCompactInteger(NSDecimalNumber(decimal: rule.threshold).intValue)) tokens"
         }
     }
 
@@ -556,6 +593,9 @@ private struct ProviderOverviewCard: View {
         }
         if account.provider == .openrouter {
             return "来源：OpenRouter activity · 约 30 天 UTC 日桶"
+        }
+        if account.provider == .genericHTTP {
+            return "来源：通用 HTTP · 仅映射字段"
         }
         if account.isDemo || model.isDemo {
             return "来源：演示数据 · 不联网"

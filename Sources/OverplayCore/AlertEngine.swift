@@ -19,6 +19,13 @@ public struct AlertSnapshot {
     public var refreshInterval: TimeInterval
     public var usageIsFresh: Bool
     public var now: Date
+    public var alertConfig: AccountAlertConfig?
+    public var publicAlertConfig: PublicAlertConfig
+    public var latestQuota: QuotaSnapshot?
+    public var quotaIsFresh: Bool
+    public var latestBalances: [BalanceSnapshot]
+    public var monthTokens: Int?
+    public var tokenUsageIsFresh: Bool
 
     public init(
         accountId: String,
@@ -38,7 +45,14 @@ public struct AlertSnapshot {
         createdAt: Date,
         refreshInterval: TimeInterval,
         usageIsFresh: Bool,
-        now: Date
+        now: Date,
+        alertConfig: AccountAlertConfig? = nil,
+        publicAlertConfig: PublicAlertConfig = PublicAlertConfig(),
+        latestQuota: QuotaSnapshot? = nil,
+        quotaIsFresh: Bool = false,
+        latestBalances: [BalanceSnapshot] = [],
+        monthTokens: Int? = nil,
+        tokenUsageIsFresh: Bool = false
     ) {
         self.accountId = accountId
         self.accountName = accountName
@@ -58,6 +72,13 @@ public struct AlertSnapshot {
         self.refreshInterval = refreshInterval
         self.usageIsFresh = usageIsFresh
         self.now = now
+        self.alertConfig = alertConfig
+        self.publicAlertConfig = publicAlertConfig
+        self.latestQuota = latestQuota
+        self.quotaIsFresh = quotaIsFresh
+        self.latestBalances = latestBalances
+        self.monthTokens = monthTokens
+        self.tokenUsageIsFresh = tokenUsageIsFresh
     }
 }
 
@@ -76,8 +97,12 @@ public final class AlertEngine {
         guard snapshot.enabled else { return [] }
         var events: [AlertEvent] = []
 
-        events.append(contentsOf: try evaluateBudget(snapshot))
-        events.append(contentsOf: try evaluateBalance(snapshot))
+        if snapshot.alertConfig != nil {
+            events.append(contentsOf: try evaluateLines(snapshot))
+        } else {
+            events.append(contentsOf: try evaluateBudget(snapshot))
+            events.append(contentsOf: try evaluateBalance(snapshot))
+        }
         events.append(contentsOf: try evaluateSyncFailure(snapshot))
         events.append(contentsOf: try evaluateCredential(snapshot))
         events.append(contentsOf: try evaluateStale(snapshot))
@@ -87,6 +112,101 @@ public final class AlertEngine {
             try store.insertAlerts(events)
         }
         return unique
+    }
+
+    private func evaluateLines(_ snapshot: AlertSnapshot) throws -> [AlertEvent] {
+        guard let config = snapshot.alertConfig else { return [] }
+        let rules = config.resolved(public: snapshot.publicAlertConfig)
+        let (monthKey, _) = CalendarDay.monthRange(now: snapshot.now)
+        var events: [AlertEvent] = []
+
+        for rule in rules {
+            guard let value = metricValue(rule: rule, snapshot: snapshot) else { continue }
+            let periodKey = rule.metric == .balanceAbsolute ? "armed" : monthKey
+            let key = "line:\(snapshot.accountId):\(rule.severity.rawValue):\(rule.metric.rawValue):\(periodKey)"
+            let state = try store.alertState(key: key)
+            let triggered: Bool
+            let recovered: Bool
+            if rule.metric.isLowerBound {
+                triggered = value <= rule.threshold
+                recovered = value > rule.threshold
+            } else {
+                let hysteresis: Decimal = rule.metric.usesPercent ? Self.budgetHysteresis : 0
+                triggered = value >= rule.threshold
+                recovered = value < rule.threshold - hysteresis
+            }
+
+            if triggered, state?.active != true {
+                let kind: AlertKind = rule.severity == .critical ? .lineCritical : .lineWarning
+                let event = AlertEvent(
+                    accountId: snapshot.accountId,
+                    accountName: snapshot.accountName,
+                    kind: kind,
+                    firedAt: snapshot.now,
+                    value: displayValue(value, metric: rule.metric),
+                    threshold: displayValue(rule.threshold, metric: rule.metric),
+                    metric: "\(rule.metric.label) · \(rule.source)",
+                    periodKey: periodKey,
+                    isDemo: snapshot.isDemo
+                )
+                events.append(event)
+                try store.upsertAlertState(AlertState(
+                    key: key,
+                    active: true,
+                    lastFiredAt: snapshot.now,
+                    lastValue: displayValue(value, metric: rule.metric)
+                ))
+            } else if recovered, state?.active == true {
+                try store.upsertAlertState(AlertState(
+                    key: key,
+                    active: false,
+                    lastFiredAt: state?.lastFiredAt,
+                    lastValue: displayValue(value, metric: rule.metric)
+                ))
+            }
+        }
+        return events
+    }
+
+    private func metricValue(rule: ResolvedAlertRule, snapshot: AlertSnapshot) -> Decimal? {
+        switch rule.metric {
+        case .budgetPercent:
+            guard snapshot.provider.capabilities.usage,
+                  let budget = snapshot.budget,
+                  budget.amount > 0,
+                  let spend = snapshot.monthSpend,
+                  snapshot.usageIsFresh else { return nil }
+            return spend / budget.amount * 100
+        case .quotaPercent:
+            guard snapshot.quotaIsFresh,
+                  let quota = snapshot.latestQuota,
+                  let percent = quota.usagePercent else { return nil }
+            return percent
+        case .balanceAbsolute:
+            guard snapshot.balanceIsFresh else { return nil }
+            let balance: BalanceSnapshot?
+            if let currency = rule.currency {
+                balance = snapshot.latestBalances.first { $0.currency == currency }
+                    ?? (snapshot.latestBalance?.currency == currency ? snapshot.latestBalance : nil)
+            } else {
+                balance = snapshot.latestBalances.first ?? snapshot.latestBalance
+            }
+            return balance?.total
+        case .tokenAbsolute:
+            guard snapshot.tokenUsageIsFresh, let tokens = snapshot.monthTokens else { return nil }
+            return Decimal(tokens)
+        }
+    }
+
+    private func displayValue(_ value: Decimal, metric: AlertMetricKind) -> String {
+        switch metric {
+        case .budgetPercent, .quotaPercent:
+            return Money.percent(value)
+        case .balanceAbsolute:
+            return NSDecimalNumber(decimal: value).stringValue
+        case .tokenAbsolute:
+            return Money.formatInteger(NSDecimalNumber(decimal: value).intValue)
+        }
     }
 
     private func evaluateBudget(_ snapshot: AlertSnapshot) throws -> [AlertEvent] {

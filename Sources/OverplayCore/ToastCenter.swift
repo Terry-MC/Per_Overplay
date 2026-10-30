@@ -120,9 +120,9 @@ public struct ToastQueue: Equatable, Sendable {
 public enum AlertNoticePolicy {
     public static func style(for kind: AlertKind) -> NoticeStyle {
         switch kind {
-        case .budgetExceeded, .balanceLow, .credentialInvalid, .syncFailed:
+        case .budgetExceeded, .balanceLow, .credentialInvalid, .syncFailed, .lineCritical:
             return .error
-        case .budgetWarning:
+        case .budgetWarning, .lineWarning:
             return .info
         case .dataStale:
             return .warning
@@ -142,7 +142,7 @@ public enum AlertNoticePolicy {
             style: style,
             alertId: alert.id,
             isDemo: alert.isDemo,
-            duration: 8,
+            duration: alert.kind == .lineWarning ? 5 : 8,
             autoDismiss: autoDismiss(for: alert.kind)
         )
     }

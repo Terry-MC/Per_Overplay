@@ -279,6 +279,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let model else { return .terminateNow }
+        guard !model.hasUnsavedChanges
+            || AppPanels.confirmDiscardUnsaved(model: model, action: "退出") else {
+            return .terminateCancel
+        }
+        return .terminateNow
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         shutdownSequence?.runIfNeeded()
     }
@@ -293,6 +302,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showFloatingWindow() {
+        guard !model.hasUnsavedChanges
+            || AppPanels.confirmDiscardUnsaved(model: model, action: "切换到简略版") else {
+            return
+        }
         windowController?.window?.orderOut(nil)
         viewMode = .floating
         floatingController.show()
@@ -431,6 +444,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         checks.append(("tabQuotaSelected", model.selectedTab == .quota))
         model.selectedTab = .settings
         checks.append(("tabSettingsSelected", model.selectedTab == .settings))
+        model.selectedTab = .addProvider
+        checks.append(("tabAddProviderSelected", model.selectedTab == .addProvider))
         model.selectedTab = .overview
         checks.append(("tabBaseInfoSelected", model.selectedTab == .overview))
         if let firstAccount = model.accounts.first {
@@ -590,6 +605,10 @@ final class DashboardWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard !model.hasUnsavedChanges
+            || AppPanels.confirmDiscardUnsaved(model: model, action: "关闭主窗口") else {
+            return false
+        }
         sender.orderOut(nil)
         onHide?()
         return false

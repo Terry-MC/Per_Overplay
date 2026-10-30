@@ -8,6 +8,7 @@ enum DashboardTab: String, CaseIterable, Identifiable {
     case overview
     case usage
     case quota
+    case addProvider
     case settings
 
     var id: String { rawValue }
@@ -17,6 +18,7 @@ enum DashboardTab: String, CaseIterable, Identifiable {
         case .overview: return "基础信息"
         case .usage: return "用量分析"
         case .quota: return "额度与预算"
+        case .addProvider: return "新增厂商"
         case .settings: return "设置"
         }
     }
@@ -26,6 +28,7 @@ enum DashboardTab: String, CaseIterable, Identifiable {
         case .overview: return "square.grid.2x2"
         case .usage: return "chart.bar.xaxis"
         case .quota: return "gauge.with.dots.needle.50percent"
+        case .addProvider: return "plus.rectangle.on.rectangle"
         case .settings: return "gearshape"
         }
     }
@@ -57,6 +60,7 @@ enum AppActionError: LocalizedError {
     case emptyKey
     case invalidAmount
     case currencyMismatch(String)
+    case duplicateAccount
     case storage(String)
 
     var errorDescription: String? {
@@ -67,8 +71,17 @@ enum AppActionError: LocalizedError {
         case .invalidAmount: return "请输入大于 0 的金额"
         case .currencyMismatch(let currencies):
             return "该账户的余额币种为 \(currencies)，请选择对应币种"
+        case .duplicateAccount:
+            return "同厂商下已存在同名账户，请使用不同显示名称"
         case .storage(let message): return message
         }
+    }
+}
+
+private extension String {
+    var nilIfBlank: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
 
@@ -436,15 +449,40 @@ final class AppModel: ObservableObject {
 
     // MARK: - Account management
 
-    func saveNewAccount(provider: ProviderKind, name: String, apiKey: String) throws -> Account {
+    func saveNewAccount(
+        provider: ProviderKind,
+        name: String,
+        apiKey: String,
+        officialName: String? = nil,
+        iconName: String? = nil,
+        genericConfig: GenericHTTPConfig? = nil,
+        alertConfig: AccountAlertConfig? = nil
+    ) throws -> Account {
         guard !isDemo else { throw AppActionError.demoReadOnly }
         guard let realStore else { throw AppActionError.storage("本地数据库不可用") }
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedKey.isEmpty else { throw AppActionError.emptyKey }
+        if provider == .genericHTTP {
+            guard let genericConfig else {
+                throw AppActionError.storage("通用 HTTP 缺少端点配置")
+            }
+            _ = try genericConfig.requestURL()
+        }
+        let resolvedName = trimmedName.isEmpty ? provider.displayName : trimmedName
+        if accounts.contains(where: {
+            $0.provider == provider && $0.displayName.caseInsensitiveCompare(resolvedName) == .orderedSame
+        }) {
+            throw AppActionError.duplicateAccount
+        }
         let account = Account(
             provider: provider,
-            name: trimmedName.isEmpty ? provider.displayName : trimmedName
+            name: resolvedName,
+            isDemo: false,
+            officialName: officialName?.nilIfBlank,
+            iconName: iconName?.nilIfBlank,
+            genericConfig: genericConfig,
+            alertConfig: alertConfig ?? .off
         )
         try credentials.setCredential(trimmedKey, accountId: account.id)
         do {
@@ -458,16 +496,40 @@ final class AppModel: ObservableObject {
         if let refreshed = accounts.first(where: { $0.id == account.id }) {
             refresh(account: refreshed)
         }
-        showBanner("已添加 \(account.displayName)，正在测试连接与能力", style: .success)
+        showBanner("已添加 \(account.displayName)，开始监控", style: .success)
         return account
     }
 
-    func updateAccount(_ account: Account, name: String, newAPIKey: String?) throws {
+    func updateAccount(
+        _ account: Account,
+        name: String,
+        newAPIKey: String?,
+        officialName: String? = nil,
+        iconName: String? = nil,
+        genericConfig: GenericHTTPConfig? = nil,
+        alertConfig: AccountAlertConfig? = nil
+    ) throws {
         guard !isDemo else { throw AppActionError.demoReadOnly }
         guard let realStore else { throw AppActionError.storage("本地数据库不可用") }
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = trimmedName.isEmpty ? account.provider.displayName : trimmedName
-        try realStore.updateProfile(id: account.id, name: resolvedName)
+        if accounts.contains(where: {
+            $0.id != account.id && $0.provider == account.provider
+                && $0.displayName.caseInsensitiveCompare(resolvedName) == .orderedSame
+        }) {
+            throw AppActionError.duplicateAccount
+        }
+        let resolvedGeneric = genericConfig ?? account.genericConfig
+        if account.provider == .genericHTTP, let resolvedGeneric {
+            _ = try resolvedGeneric.requestURL()
+        }
+        let profile = OverplayStore.AccountProfile(
+            officialName: officialName?.nilIfBlank ?? account.officialName,
+            iconName: iconName?.nilIfBlank ?? account.iconName,
+            genericConfig: resolvedGeneric,
+            alertConfig: alertConfig ?? account.alertConfig
+        )
+        try realStore.updateAccountProfile(id: account.id, name: resolvedName, profile: profile)
         let trimmedKey = newAPIKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !trimmedKey.isEmpty {
             try credentials.setCredential(trimmedKey, accountId: account.id)
@@ -481,6 +543,51 @@ final class AppModel: ObservableObject {
             }
         }
         showBanner("账户信息已更新", style: .success)
+    }
+
+    func savePublicAlertConfig(_ config: PublicAlertConfig) {
+        guard !isDemo else { return }
+        var updated = settings
+        updated.publicAlertConfig = config
+        guard let store = activeStore else { return }
+        do {
+            try store.saveSettings(updated)
+            settings = updated
+            syncEngine?.updateSettings(updated)
+            for account in accounts {
+                guard let config = account.alertConfig else { continue }
+                for (severity, rule) in [("warning", config.warning), ("critical", config.critical)]
+                where rule.mode == .followPublic && rule.metric.usesPercent {
+                    try? store.deleteAlertStates(
+                        like: "line:\(account.id):\(severity):\(rule.metric.rawValue):%"
+                    )
+                }
+            }
+            evaluateAndReloadAlerts()
+            showBanner("公共告知 / 警戒线已保存", style: .success)
+        } catch {
+            showBanner("保存公共告警线失败：\(error.localizedDescription)", style: .error)
+        }
+    }
+
+    func saveAccountAlertConfig(_ account: Account, config: AccountAlertConfig) {
+        guard !isDemo else {
+            showBanner("演示模式不可修改告警线", style: .info)
+            return
+        }
+        guard let store = activeStore else { return }
+        do {
+            var profile = try store.accountProfile(accountId: account.id)
+                ?? OverplayStore.AccountProfile()
+            profile.alertConfig = config
+            try store.saveAccountProfile(accountId: account.id, profile: profile)
+            try? store.deleteAlertStates(like: "line:\(account.id):%")
+            reloadFromStore()
+            evaluateAndReloadAlerts()
+            showBanner("告警线配置已保存", style: .success)
+        } catch {
+            showBanner("保存告警线失败：\(error.localizedDescription)", style: .error)
+        }
     }
 
     func setAccountEnabled(_ account: Account, enabled: Bool) {
@@ -527,14 +634,22 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func testConnection(provider: ProviderKind, apiKey: String) async -> ConnectionTestResult {
+    func testConnection(
+        provider: ProviderKind,
+        apiKey: String,
+        genericConfig: GenericHTTPConfig? = nil
+    ) async -> ConnectionTestResult {
         cancelConnectionTest()
         connectionTestToken += 1
         let token = connectionTestToken
         let credential = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let transport = URLSessionTransport()
         let task = Task {
-            let connector = ConnectorFactory.make(for: provider, transport: transport)
+            let connector = ConnectorFactory.make(
+                for: provider,
+                transport: transport,
+                genericConfig: genericConfig
+            )
             let result = await connector.testConnection(credential: credential, now: Date())
             transport.shutdown()
             return result
@@ -1183,13 +1298,13 @@ final class AppModel: ObservableObject {
 
     var hasCriticalAlert: Bool {
         alerts.contains {
-            !$0.acknowledged && [.budgetExceeded, .balanceLow, .credentialInvalid, .syncFailed].contains($0.kind)
+            !$0.acknowledged && [.budgetExceeded, .balanceLow, .credentialInvalid, .syncFailed, .lineCritical].contains($0.kind)
         }
     }
 
     var hasWarningAlert: Bool {
         alerts.contains {
-            !$0.acknowledged && [.budgetWarning, .dataStale].contains($0.kind)
+            !$0.acknowledged && [.budgetWarning, .dataStale, .lineWarning].contains($0.kind)
         }
     }
 
