@@ -640,6 +640,8 @@ private struct ProviderOverviewCard: View {
 }
 
 private struct OrganizationTag: View {
+    @Environment(\.locale) private var locale
+
     var body: some View {
         HStack(spacing: 3) {
             Image(systemName: "building.2")

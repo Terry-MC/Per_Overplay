@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 import OverplayCore
 
 struct DemoTag: View {
+    @Environment(\.locale) private var locale
+
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: "flask.fill")
@@ -19,6 +21,8 @@ struct DemoTag: View {
 }
 
 struct DemoBanner: View {
+    @Environment(\.locale) private var locale
+
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "flask.fill")
@@ -322,6 +326,7 @@ struct FlowLayout: Layout {
 }
 
 struct HealthBadge: View {
+    @Environment(\.locale) private var locale
     var health: AccountHealth
 
     private var color: Color {
@@ -510,6 +515,7 @@ struct ToastCardView: View {
 }
 
 struct AnomalyNotice: View {
+    @Environment(\.locale) private var locale
     var message: String
 
     var body: some View {
@@ -535,6 +541,7 @@ struct AnomalyNotice: View {
 }
 
 struct InlineErrorView: View {
+    @Environment(\.locale) private var locale
     var message: String
 
     var body: some View {
@@ -655,6 +662,7 @@ struct MessageCenterEntryCard: View {
 }
 
 struct AlertRowView: View {
+    @Environment(\.locale) private var locale
     var alert: AlertEvent
     var isDemo: Bool
     var onAcknowledge: () -> Void
@@ -717,6 +725,7 @@ struct AlertRowView: View {
 }
 
 struct BudgetProgressBar: View {
+    @Environment(\.locale) private var locale
     var ratio: Decimal?
     var isDemo: Bool
 

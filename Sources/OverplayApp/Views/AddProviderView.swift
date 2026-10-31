@@ -814,6 +814,7 @@ private func alertLineValidationError(
 }
 
 struct AlertLineRuleEditor: View {
+    @Environment(\.locale) private var locale
     var title: String
     @Binding var rule: AlertLineRule
     @Binding var valueText: String
