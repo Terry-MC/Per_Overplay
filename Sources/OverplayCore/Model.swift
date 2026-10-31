@@ -29,13 +29,13 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
         switch self {
         case .deepseek: return "DeepSeek"
         case .openrouter: return "OpenRouter"
-        case .genericHTTP: return "通用 HTTP"
+        case .genericHTTP: return L10n.t("provider.genericHTTP.name")
         case .kimi: return "Kimi"
         case .glm: return "GLM"
         case .minimax: return "MiniMax"
         case .qwen: return "Qwen"
-        case .seed: return "豆包 Seed"
-        case .hunyuan: return "腾讯混元"
+        case .seed: return L10n.t("provider.seed.name")
+        case .hunyuan: return L10n.t("provider.hunyuan.name")
         case .openai: return "OpenAI GPT"
         case .anthropic: return "Anthropic Claude"
         case .gemini: return "Google Gemini"
@@ -62,7 +62,7 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
                 usage: false,
                 cost: false,
                 credits: false,
-                note: "官方仅提供余额，无历史用量 / 费用接口"
+                note: L10n.t("core.model.21bf4c5100")
             )
         case .openrouter:
             return ProviderCapabilities(
@@ -70,7 +70,7 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
                 usage: true,
                 cost: true,
                 credits: true,
-                note: "需 Management Key；用量窗口约 30 天（UTC 日桶）"
+                note: L10n.t("core.model.65f0753d1b")
             )
         case .genericHTTP:
             return ProviderCapabilities(
@@ -78,7 +78,7 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
                 usage: false,
                 cost: false,
                 credits: false,
-                note: "通用 HTTP · 能力由字段映射决定"
+                note: L10n.t("core.model.684a3a4a0d")
             )
         default:
             return ProviderCapabilities(
@@ -86,7 +86,7 @@ public enum ProviderKind: String, Codable, CaseIterable, Identifiable, Sendable 
                 usage: true,
                 cost: true,
                 credits: true,
-                note: "演示平台；真实连接器未接入"
+                note: L10n.t("core.model.c73f334d53")
             )
         }
     }
@@ -101,12 +101,12 @@ public struct ProviderCapabilities: Equatable, Codable {
 
     public var summary: String {
         var parts: [String] = []
-        if credits { parts.append("credits / 额度") }
-        if balance { parts.append("余额") }
-        if usage { parts.append("用量") }
-        if cost { parts.append("费用") }
-        if parts.isEmpty { return "受限支持" }
-        return parts.joined(separator: " / ") + " 可用"
+        if credits { parts.append(L10n.t("core.model.50c3eb2b88")) }
+        if balance { parts.append(L10n.t("metric.balance")) }
+        if usage { parts.append(L10n.t("metric.usage")) }
+        if cost { parts.append(L10n.t("metric.cost")) }
+        if parts.isEmpty { return L10n.t("core.model.fb83ad43ea") }
+        return L10n.f("capability.summary", parts.joined(separator: " / "))
     }
 }
 
@@ -352,14 +352,14 @@ public enum AlertKind: String, Codable, CaseIterable {
 
     public var title: String {
         switch self {
-        case .budgetWarning: return "预算已达 80%"
-        case .budgetExceeded: return "预算已用尽"
-        case .balanceLow: return "余额低于阈值"
-        case .syncFailed: return "连续同步失败"
-        case .credentialInvalid: return "凭据失效"
-        case .dataStale: return "数据已过期"
-        case .lineWarning: return "告知线触发"
-        case .lineCritical: return "警戒线触发"
+        case .budgetWarning: return L10n.t("alert.budgetWarning.title")
+        case .budgetExceeded: return L10n.t("alert.budgetExceeded.title")
+        case .balanceLow: return L10n.t("alert.balanceLow.title")
+        case .syncFailed: return L10n.t("alert.syncFailed.title")
+        case .credentialInvalid: return L10n.t("alert.credentialInvalid.title")
+        case .dataStale: return L10n.t("alert.dataStale.title")
+        case .lineWarning: return L10n.t("alert.lineWarning.title")
+        case .lineCritical: return L10n.t("alert.lineCritical.title")
         }
     }
 }
@@ -557,16 +557,16 @@ public enum AccountHealth: Equatable {
 
     public var label: String {
         switch self {
-        case .neverSynced: return "尚未同步"
-        case .syncing: return "同步中"
-        case .healthy: return "正常"
-        case .partial: return "部分成功"
-        case .failed: return "同步失败"
-        case .invalidCredential: return "凭据失效"
-        case .accountAbnormal: return "账户异常"
-        case .connectedNoData: return "已连接 · 无数据"
-        case .disabled: return "已禁用"
-        case .stale: return "已过期"
+        case .neverSynced: return L10n.t("health.neverSynced")
+        case .syncing: return L10n.t("health.syncing")
+        case .healthy: return L10n.t("health.normal")
+        case .partial: return L10n.t("app.2f2b7e05e3")
+        case .failed: return L10n.t("metric.syncFailure")
+        case .invalidCredential: return L10n.t("alert.credentialInvalid.title")
+        case .accountAbnormal: return L10n.t("health.accountAbnormal")
+        case .connectedNoData: return L10n.t("health.connectedNoData")
+        case .disabled: return L10n.t("health.disabled")
+        case .stale: return L10n.t("health.stale")
         }
     }
 }

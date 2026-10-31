@@ -56,11 +56,11 @@ public enum DataStatus: Equatable, Sendable {
     public var emptyLabel: String {
         switch self {
         case .actual: return ""
-        case .missing: return "无数据"
-        case .unavailable: return "不可用"
-        case .partial: return "暂无完整数据"
-        case .failed: return "同步失败"
-        case .anomaly: return "数据异常"
+        case .missing: return L10n.t("dataStatus.6ffa7e6d35")
+        case .unavailable: return L10n.t("dataStatus.beff4a1cd1")
+        case .partial: return L10n.t("dataStatus.d70cea022c")
+        case .failed: return L10n.t("metric.syncFailure")
+        case .anomaly: return L10n.t("dataStatus.ff09dc6102")
         }
     }
 
@@ -73,15 +73,15 @@ public enum DataStatus: Equatable, Sendable {
         case .actual:
             return .actual
         case .missing(let reason):
-            return .missing("\(label)：\(reason)")
+            return .missing(L10n.f("common.labeledReason", label, L10n.t(reason)))
         case .unavailable(let reason):
-            return .unavailable("\(label)：\(reason)")
+            return .unavailable(L10n.f("common.labeledReason", label, L10n.t(reason)))
         case .partial(let reason):
-            return .partial("\(label)：\(reason)")
+            return .partial(L10n.f("common.labeledReason", label, L10n.t(reason)))
         case .failed(let reason):
-            return .failed("\(label)：\(reason)")
+            return .failed(L10n.f("common.labeledReason", label, L10n.t(reason)))
         case .anomaly(let reason):
-            return .anomaly("\(label)：\(reason)")
+            return .anomaly(L10n.f("common.labeledReason", label, L10n.t(reason)))
         }
     }
 }

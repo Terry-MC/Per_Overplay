@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Darwin
 import SwiftUI
 import OverplayCore
@@ -10,6 +11,7 @@ struct LaunchOptions {
     var snapshotPath: String?
     var snapshotDirectory: String?
     var dataDirectory: URL?
+    var languageIdentifier: String?
     var overviewPlatform: ProviderKind?
     var overviewAccount: String?
     var windowWidth: CGFloat?
@@ -68,6 +70,9 @@ struct LaunchOptions {
                 if let height = Double(arguments[index]) {
                     options.windowHeight = CGFloat(height)
                 }
+            case "--language" where index + 1 < arguments.count:
+                index += 1
+                options.languageIdentifier = arguments[index]
             case "--dark":
                 options.darkAppearance = true
             case "--ui-smoke":
@@ -122,6 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var model: AppModel!
+    private var cancellables = Set<AnyCancellable>()
     private var statusBarController: StatusBarController!
     private var windowController: DashboardWindowController!
     private var floatingController: FloatingWindowController!
@@ -139,6 +145,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         model = AppModel(dataDirectory: options.dataDirectory, forceDemo: options.demo)
+        if let language = options.languageIdentifier {
+            model.setLanguage(identifier: language)
+        }
         if options.suppressToasts {
             model.dismissAllToasts()
         }
@@ -193,6 +202,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ("remove-status-item", { [weak self] in self?.statusBarController.removeStatusItem() })
         ])
         model.start()
+        configureMainMenu()
+        model.$localizationRevision
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.configureMainMenu() }
+            .store(in: &cancellables)
 
         let isSnapshotMode = options.snapshotPath != nil || options.snapshotDirectory != nil
         let showMainAtLaunch = options.showWindow || isSnapshotMode || options.uiSmoke
@@ -297,7 +312,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let model else { return .terminateNow }
         guard !model.hasUnsavedChanges
-            || AppPanels.confirmDiscardUnsaved(model: model, action: "退出") else {
+            || AppPanels.confirmDiscardUnsaved(model: model, action: L10n.t("appDelegate.feecb1e6ad")) else {
             return .terminateCancel
         }
         return .terminateNow
@@ -318,7 +333,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showFloatingWindow() {
         guard !model.hasUnsavedChanges
-            || AppPanels.confirmDiscardUnsaved(model: model, action: "切换到简略版") else {
+            || AppPanels.confirmDiscardUnsaved(model: model, action: L10n.t("appDelegate.f9f838cb05")) else {
             return
         }
         windowController?.window?.orderOut(nil)
@@ -343,20 +358,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(appItem)
         let appMenu = NSMenu()
         appMenu.addItem(
-            withTitle: "关于 Overplay",
+            withTitle: L10n.t("appDelegate.c1e00d3105"),
             action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
             keyEquivalent: ""
         )
         appMenu.addItem(.separator())
         let hideItem = NSMenuItem(
-            title: "隐藏 Overplay",
+            title: L10n.t("appDelegate.36bc63fe16"),
             action: #selector(NSApplication.hide(_:)),
             keyEquivalent: "h"
         )
         appMenu.addItem(hideItem)
         appMenu.addItem(.separator())
         let quitItem = NSMenuItem(
-            title: "退出 Overplay",
+            title: L10n.t("statusBar.d94cefe4dc"),
             action: #selector(quitFromMenu),
             keyEquivalent: "q"
         )
@@ -366,17 +381,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let editItem = NSMenuItem()
         mainMenu.addItem(editItem)
-        let editMenu = NSMenu(title: "编辑")
-        editMenu.addItem(withTitle: "撤销", action: Selector(("undo:")), keyEquivalent: "z")
-        editMenu.addItem(withTitle: "重做", action: Selector(("redo:")), keyEquivalent: "Z")
+        let editMenu = NSMenu(title: L10n.t("common.edit"))
+        editMenu.addItem(withTitle: L10n.t("appDelegate.9fcefd8dc8"), action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: L10n.t("appDelegate.1238f0d363"), action: Selector(("redo:")), keyEquivalent: "Z")
         editMenu.addItem(.separator())
-        editMenu.addItem(withTitle: "剪切", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        editMenu.addItem(withTitle: "拷贝", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        editMenu.addItem(withTitle: "粘贴", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        editMenu.addItem(withTitle: "全选", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editMenu.addItem(withTitle: L10n.t("appDelegate.29b653b40e"), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: L10n.t("appDelegate.bc6d0279b6"), action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: L10n.t("appDelegate.de7fb7d3cf"), action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: L10n.t("appDelegate.3e44b2a933"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editItem.submenu = editMenu
 
+        if let model {
+            let languageItem = NSMenuItem()
+            mainMenu.addItem(languageItem)
+            let languageMenu = NSMenu(title: L10n.t("settings.language.title"))
+            for language in model.languageOptions {
+                let item = NSMenuItem(
+                    title: language.displayName,
+                    action: #selector(changeLanguageFromMenu(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.representedObject = language.id
+                item.state = language.id == model.selectedLanguageIdentifier ? .on : .off
+                languageMenu.addItem(item)
+            }
+            languageItem.submenu = languageMenu
+        }
+
         NSApp.mainMenu = mainMenu
+    }
+
+    @objc private func changeLanguageFromMenu(_ sender: NSMenuItem) {
+        guard let identifier = sender.representedObject as? String else { return }
+        model.setLanguage(identifier: identifier)
     }
 
     @objc private func quitFromMenu() {
@@ -626,7 +664,7 @@ final class DashboardWindowController: NSWindowController, NSWindowDelegate {
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard !model.hasUnsavedChanges
-            || AppPanels.confirmDiscardUnsaved(model: model, action: "关闭主窗口") else {
+            || AppPanels.confirmDiscardUnsaved(model: model, action: L10n.t("appDelegate.c664d556f3")) else {
             return false
         }
         sender.orderOut(nil)

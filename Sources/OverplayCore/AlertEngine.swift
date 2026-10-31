@@ -148,7 +148,7 @@ public final class AlertEngine {
                     firedAt: snapshot.now,
                     value: displayValue(value, metric: rule.metric),
                     threshold: displayValue(rule.threshold, metric: rule.metric),
-                    metric: "\(rule.metric.label) · \(rule.source)",
+                    metric: "\(rule.metric.canonicalLabel) · \(rule.canonicalSource)",
                     periodKey: periodKey,
                     isDemo: snapshot.isDemo
                 )
@@ -318,7 +318,7 @@ public final class AlertEngine {
             accountName: snapshot.accountName,
             kind: .syncFailed,
             firedAt: snapshot.now,
-            value: "连续 \(snapshot.consecutiveFailures) 次失败",
+            value: "连续 \(snapshot.consecutiveFailures) 次",
             threshold: "3 次",
             metric: "同步失败告警（6 小时冷却）",
             periodKey: "cooldown",
@@ -417,17 +417,27 @@ public final class AlertEngine {
 }
 
 public enum DateFormatters {
-    public static let mediumDateTime: DateFormatter = {
+    public static var mediumDateTime: DateFormatter {
+        let locale = LocalizationStore.shared.currentLocale
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
-        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        formatter.locale = locale
+        if locale.language.languageCode?.identifier == "en" {
+            formatter.setLocalizedDateFormatFromTemplate("yMMMd HH:mm")
+        } else {
+            formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        }
         return formatter
-    }()
+    }
 
-    public static let shortTime: DateFormatter = {
+    public static var shortTime: DateFormatter {
+        let locale = LocalizationStore.shared.currentLocale
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
-        formatter.dateFormat = "HH:mm:ss"
+        formatter.locale = locale
+        if locale.language.languageCode?.identifier == "en" {
+            formatter.setLocalizedDateFormatFromTemplate("HH:mm:ss")
+        } else {
+            formatter.dateFormat = "HH:mm:ss"
+        }
         return formatter
-    }()
+    }
 }

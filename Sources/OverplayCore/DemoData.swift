@@ -1,11 +1,13 @@
 import Foundation
 
 public enum DemoMode {
-    public static let disclaimer = """
-    演示模式中的厂商数据、用量、费用、余额、额度、进度与告警均为模拟数据，仅用于展示产品功能，不代表任何真实账户、账单或消耗，不构成财务、税务、法律或投资建议。请勿将演示数据用于对账、报销、预算或其他实际决策；实际数据以各厂商官方控制台及账单为准。演示模式不会连接任何厂商接口，也不会读取或写入真实凭证。
-    """
+    public static var disclaimer: String {
+        L10n.t("demo.disclaimer")
+    }
 
-    public static let shortBadge = "演示数据 · 仅作功能展示，不代表真实账单"
+    public static var shortBadge: String {
+        L10n.t("demo.shortBadge")
+    }
 }
 
 private struct DemoUsageModel {

@@ -11,6 +11,7 @@ let package = Package(
     targets: [
         .target(
             name: "OverplayCore",
+            resources: [.copy("Resources")],
             linkerSettings: [.linkedLibrary("sqlite3")]
         ),
         .executableTarget(

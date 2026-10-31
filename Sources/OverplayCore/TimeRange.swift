@@ -6,7 +6,7 @@ public enum AnalysisPreset: Int, CaseIterable, Identifiable {
     case ninety = 90
 
     public var id: Int { rawValue }
-    public var label: String { "\(rawValue) 天" }
+    public var label: String { L10n.f("core.timeRange.5834f54606", rawValue) }
 }
 
 public struct DayRange: Equatable, Sendable {
@@ -22,7 +22,7 @@ public struct DayRange: Equatable, Sendable {
         day >= startDay && day <= endDay
     }
 
-    public var label: String { "\(startDay) 至 \(endDay)" }
+    public var label: String { L10n.f("core.timeRange.5881d08473", startDay, endDay) }
 }
 
 public enum CalendarDay {

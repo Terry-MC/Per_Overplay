@@ -60,8 +60,8 @@ public struct StatusItemPresentation: Equatable, Sendable {
             severity: severity,
             showsDemoBadge: isDemo,
             accessibilityLabel: isDemo
-                ? "Overplay 菜单栏图标 · 演示数据"
-                : "Overplay 菜单栏图标"
+                ? L10n.t("core.statusItem.d4a6791c52")
+                : L10n.t("statusBar.44fd17022a")
         )
     }
 }

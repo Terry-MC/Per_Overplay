@@ -7,8 +7,8 @@ public enum FloatingDensity: String, Codable, Equatable, Sendable {
 
     public var title: String {
         switch self {
-        case .expanded: return "完整"
-        case .compact: return "压缩"
+        case .expanded: return L10n.t("core.floatingState.6e6e581133")
+        case .compact: return L10n.t("core.floatingState.4b8163f527")
         }
     }
 }

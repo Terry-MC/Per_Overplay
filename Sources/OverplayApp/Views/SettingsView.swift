@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import OverplayCore
 
 struct SettingsView: View {
@@ -6,6 +7,8 @@ struct SettingsView: View {
     var onAddAccount: () -> Void
     var onEditAccount: (Account) -> Void
     var onDeleteAccount: (Account) -> Void
+    @State private var showLanguageImporter = false
+    @State private var languageError: String?
 
     private var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -18,6 +21,7 @@ struct SettingsView: View {
             if let warning = model.initializationWarning {
                 InlineErrorView(message: warning)
             }
+            languageSection
             generalSection
             accountsSection
             demoSection
@@ -27,13 +31,102 @@ struct SettingsView: View {
         }
     }
 
+    private var languageSection: some View {
+        SectionCard(title: L10n.t("settings.language.title"), isDemo: model.isDemo) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("settings.language.picker")).font(.subheadline.weight(.semibold))
+                        Text(L10n.t("settings.language.description"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Picker(L10n.t("settings.language.picker"), selection: Binding(
+                        get: { model.selectedLanguageIdentifier },
+                        set: { model.setLanguage(identifier: $0) }
+                    )) {
+                        ForEach(model.languageOptions) { language in
+                            Text(language.displayName).tag(language.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .frame(width: 220)
+                }
+                HStack(spacing: 10) {
+                    Button {
+                        languageError = nil
+                        showLanguageImporter = true
+                    } label: {
+                        Label(L10n.t("settings.language.import"), systemImage: "square.and.arrow.down")
+                    }
+                    .disabled(model.isDemo)
+                    if let pack = model.selectedImportedLanguagePack {
+                        Text(L10n.f("settings.language.current", pack.displayName, pack.locale))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button(L10n.t("settings.language.remove"), role: .destructive) {
+                            do {
+                                try model.removeLanguagePack(locale: pack.locale)
+                                languageError = nil
+                            } catch {
+                                languageError = error.localizedDescription
+                            }
+                        }
+                        .disabled(model.isDemo)
+                    }
+                    Spacer()
+                }
+                if model.isDemo {
+                    Text(L10n.t("settings.language.demo"))
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
+                if let languageError {
+                    InlineErrorView(message: languageError)
+                }
+                Text(L10n.t("settings.language.format"))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .fileImporter(
+            isPresented: $showLanguageImporter,
+            allowedContentTypes: [.json],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                let accessing = url.startAccessingSecurityScopedResource()
+                defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                do {
+                    let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                    guard size <= LocalizedLanguagePack.maxFileSize else {
+                        throw LanguagePackError.fileTooLarge
+                    }
+                    let data = try Data(contentsOf: url)
+                    _ = try model.importLanguagePack(
+                        data: data,
+                        sourceFileName: url.lastPathComponent
+                    )
+                    languageError = nil
+                } catch {
+                    languageError = error.localizedDescription
+                }
+            case .failure(let error):
+                languageError = error.localizedDescription
+            }
+        }
+    }
+
     private var generalSection: some View {
-        SectionCard(title: "刷新与通知", isDemo: model.isDemo) {
+        SectionCard(title: L10n.t("settings.a69e4d32ff"), isDemo: model.isDemo) {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("自动刷新间隔").font(.subheadline.weight(.semibold))
-                        Text("默认 15 分钟，可在 5–60 分钟之间配置。收起 / 隐藏窗口不暂停；退出应用才停止。")
+                        Text(L10n.t("settings.c652467e5f")).font(.subheadline.weight(.semibold))
+                        Text(L10n.t("settings.fc9d1e60c1"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -46,14 +139,14 @@ struct SettingsView: View {
                         in: 5...60,
                         step: 5
                     ) {
-                        Text("每 \(model.settings.refreshIntervalMinutes) 分钟")
+                        Text(L10n.f("settings.eb7fa47f34", model.settings.refreshIntervalMinutes))
                             .monospacedDigit()
-                            .frame(width: 96, alignment: .trailing)
+                            .frame(width: 160, alignment: .trailing)
                     }
                     .disabled(model.isDemo)
                 }
                 if model.isDemo {
-                    Text("演示模式仅修改当前内存演示设置，不影响真实配置。")
+                    Text(L10n.t("settings.22623bd653"))
                         .font(.caption2)
                         .foregroundStyle(.orange)
                 }
@@ -63,8 +156,8 @@ struct SettingsView: View {
                     set: { model.setNotificationsEnabled($0) }
                 )) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("启用本地通知").font(.subheadline.weight(.semibold))
-                        Text("阈值告警、连续同步失败、凭据失效与数据过期提醒。通知内容不包含 API Key。")
+                        Text(L10n.t("settings.3800bcfe61")).font(.subheadline.weight(.semibold))
+                        Text(L10n.t("settings.e65c46c8c6"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -73,29 +166,29 @@ struct SettingsView: View {
                 .disabled(model.isDemo)
                 HStack(spacing: 10) {
                     if model.isDemo {
-                        Text("演示模式不请求系统通知权限，也不发送系统通知；告警仅显示在应用内。")
+                        Text(L10n.t("settings.2a71fdbf4b"))
                             .font(.caption)
                             .foregroundStyle(.orange)
                     } else {
-                        Text("通知权限：\(model.notificationStatusText)")
+                        Text(L10n.f("settings.7230d66187", model.notificationStatusText))
                             .font(.caption)
                             .foregroundStyle(model.notificationStatus == .denied ? .orange : .secondary)
                         if model.notificationStatus == .denied {
-                            Button("打开系统通知设置") {
+                            Button(L10n.t("settings.cbda26274d")) {
                                 model.openNotificationSettings()
                             }
                             .buttonStyle(.link)
                             .font(.caption)
-                            Text("应用内告警与托盘状态仍可用。")
+                            Text(L10n.t("settings.41836e4926"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
                     Spacer()
-                    Button("测试通知") {
+                    Button(L10n.t("settings.76ef862577")) {
                         model.sendTestNotification()
                     }
-                    .disabled(model.isDemo)
+                    .disabled(model.isDemo || !model.settings.notificationsEnabled)
                 }
             }
         }
@@ -103,13 +196,13 @@ struct SettingsView: View {
 
     private var accountsSection: some View {
         SectionCard(
-            title: "账户",
-            subtitle: "\(model.accounts.count) 个",
+            title: L10n.t("settings.accounts.title"),
+            subtitle: L10n.f("settings.3c12d9513d", model.accounts.count),
             isDemo: model.isDemo
         ) {
             VStack(alignment: .leading, spacing: 10) {
                 if model.accounts.isEmpty {
-                    Text("尚未添加账户。")
+                    Text(L10n.t("settings.4a6f4b687d"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 } else {
@@ -124,7 +217,7 @@ struct SettingsView: View {
                                 Text(
                                     [
                                         account.provider.displayName,
-                                        account.officialName.map { "官方 \($0)" },
+                                        account.officialName.map { L10n.f("common.officialName", $0) },
                                         model.currencyLabel(for: account),
                                         model.capabilitySummary(for: account)
                                     ].compactMap { $0 }.joined(separator: " · ")
@@ -144,24 +237,29 @@ struct SettingsView: View {
                             .labelsHidden()
                             .toggleStyle(.switch)
                             .disabled(model.isDemo)
-                            .help(account.enabled ? "禁用后停止同步与告警" : "启用账户")
-                            Button("编辑") { onEditAccount(account) }
+                            .help(account.enabled ? L10n.t("settings.9d06f77a8f") : L10n.t("settings.ae0ba48faa"))
+                            Button(L10n.t("common.edit")) { onEditAccount(account) }
                                 .disabled(model.isDemo)
-                            Button("删除") { onDeleteAccount(account) }
+                            Button(L10n.t("common.delete")) { onDeleteAccount(account) }
                                 .disabled(model.isDemo)
                         }
                         if account.id != model.accounts.last?.id { Divider() }
                     }
                 }
+                if model.isDemo {
+                    Text(L10n.t("settings.accounts.demoNote"))
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
                 HStack {
                     Button {
                         onAddAccount()
                     } label: {
-                        Label("添加账户", systemImage: "plus")
+                        Label(L10n.t("dashboard.c771c7d8e2"), systemImage: "plus")
                     }
                     .disabled(model.isDemo)
                     if model.isDemo {
-                        Text("演示模式下不可添加真实账户。")
+                        Text(L10n.t("settings.55bfbfc2da"))
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }
@@ -172,12 +270,12 @@ struct SettingsView: View {
     }
 
     private var demoSection: some View {
-        SectionCard(title: "演示模式") {
+        SectionCard(title: L10n.t("settings.fbd46976e0")) {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "flask")
                     .foregroundStyle(.orange)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("演示模式使用本地模拟数据覆盖主要页面与告警路径，不发起任何外部网络请求，也不读写 Keychain 或真实数据库。")
+                    Text(L10n.t("settings.1e1a23e5ea"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -187,29 +285,44 @@ struct SettingsView: View {
                 }
                 Spacer()
                 if model.isDemo {
-                    Button("退出演示模式") { model.exitDemoMode() }
+                    Button(L10n.t("settings.c7e8e58589")) { model.exitDemoMode() }
                         .buttonStyle(.borderedProminent)
                 } else {
-                    Button("进入演示模式") { model.requestEnterDemoMode() }
+                    Button(L10n.t("app.fb7f73f291")) { model.requestEnterDemoMode() }
                 }
-                Button("查看免责声明") { model.showDemoDisclaimer() }
+                Button(L10n.t("settings.ac7cf69b18")) { model.showDemoDisclaimer() }
             }
         }
     }
 
     private var privacySection: some View {
-        SectionCard(title: "数据与隐私") {
+        SectionCard(title: L10n.t("settings.e8afd31bb8")) {
             VStack(alignment: .leading, spacing: 10) {
-                row("本地数据位置", model.dataFileDisplayPath, monospaced: true)
-                row("凭证存储", "macOS Keychain（仅本机，不随 iCloud 同步）")
-                row("网络访问", "DeepSeek / OpenRouter 官方 HTTPS 域名，以及用户明确配置的通用 HTTPS 端点；无遥测、无第三方统计")
-                row("DeepSeek 限制", "仅余额；无历史 token / 费用接口，界面显示“厂商未提供”")
-                row("OpenRouter 限制", "需要 Management Key；activity 约 30 个 UTC 日窗口")
+                row(L10n.t("settings.fc01c2ef5e"), model.dataFileDisplayPath, monospaced: true)
+                row(L10n.t("settings.336f3130b2"), L10n.t("settings.32c1dc9cb5"))
+                row(L10n.t("settings.9ad74ff12b"), L10n.t("settings.4430bf294f"))
+                row(L10n.t("settings.157f2a9f1a"), L10n.t("settings.eeacf547b5"))
+                row(L10n.t("settings.fb83bdc4d1"), L10n.t("settings.a856374dbd"))
                 Divider()
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("清除全部本地数据").font(.subheadline.weight(.semibold))
-                        Text("删除账户、Keychain 凭证、历史用量、快照、告警与设置；需要两次确认。")
+                        Text(L10n.t("component.4d045824c0")).font(.subheadline.weight(.semibold))
+                        Text(L10n.t("settings.privacy.csvDescription"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        exportCSV()
+                    } label: {
+                        Label(L10n.t("usage.7e9cc8635e"), systemImage: "square.and.arrow.up")
+                    }
+                }
+                Divider()
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L10n.t("settings.1fd211da86")).font(.subheadline.weight(.semibold))
+                        Text(L10n.t("settings.c038e23212"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -217,12 +330,12 @@ struct SettingsView: View {
                     Button(role: .destructive) {
                         model.confirmClearAllData()
                     } label: {
-                        Text("清除全部数据")
+                        Text(L10n.t("app.04c3cd821d"))
                     }
                     .disabled(model.isDemo)
                 }
                 if model.isDemo {
-                    Text("演示模式下不会触碰真实数据或 Keychain。请先退出演示模式再清除真实数据。")
+                    Text(L10n.t("settings.fc0f6e5243"))
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
@@ -231,21 +344,21 @@ struct SettingsView: View {
     }
 
     private var aboutSection: some View {
-        SectionCard(title: "关于") {
+        SectionCard(title: L10n.t("settings.bed172efc9")) {
             VStack(alignment: .leading, spacing: 8) {
-                row("版本", appVersion)
-                Text("Overplay 仅读取官方余额 / credits / 用量接口，不代理 LLM 请求，不进行逐请求 token 统计。")
+                row(L10n.t("settings.989d1affa0"), appVersion)
+                Text(L10n.t("settings.07c1b20c2d"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 14) {
-                    Link("项目仓库", destination: URL(string: "https://github.com/Terry-MC/Per_Overplay")!)
+                    Link(L10n.t("settings.5cef613ce4"), destination: URL(string: "https://github.com/Terry-MC/Per_Overplay")!)
                     Link(
-                        "OpenRouter Management Key 文档",
+                        L10n.t("settings.f37d8a7d9e"),
                         destination: URL(string: "https://openrouter.ai/docs/api-reference/credits/get-credits")!
                     )
                     Link(
-                        "DeepSeek 余额文档",
+                        L10n.t("settings.7a85386fbe"),
                         destination: URL(string: "https://api-docs.deepseek.com/zh-cn/api/get-user-balance/")!
                     )
                 }
@@ -258,15 +371,27 @@ struct SettingsView: View {
         SectionCard {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("退出程序").font(.subheadline.weight(.semibold))
-                    Text("停止全部定时刷新、取消进行中的请求并退出。与托盘 / 悬浮窗关闭行为一致。")
+                    Text(L10n.t("settings.c7df833091")).font(.subheadline.weight(.semibold))
+                    Text(L10n.t("settings.a001860143"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("退出 Overplay") {
+                Button(L10n.t("statusBar.d94cefe4dc")) {
                     AppPanels.confirmQuit(model: model)
                 }
+            }
+        }
+    }
+
+    private func exportCSV() {
+        guard let export = model.csvExportData() else { return }
+        AppPanels.saveCSV(filename: export.filename, data: export.data, isDemo: model.isDemo) { result in
+            switch result {
+            case .success:
+                model.showBanner(L10n.f("usage.e69a391adc", export.filename), style: .success)
+            case .failure(let error):
+                model.showBanner(L10n.f("usage.af55c3ac40", L10n.t(error.localizedDescription)), style: .error)
             }
         }
     }

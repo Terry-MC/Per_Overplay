@@ -12,7 +12,7 @@ struct DeleteAccountSheet: View {
             HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red)
-                Text("删除账户")
+                Text(L10n.t("deleteAccount.9259840611"))
                     .font(.title3.weight(.semibold))
             }
             .padding(20)
@@ -26,14 +26,14 @@ struct DeleteAccountSheet: View {
                         Text(account.provider.displayName).font(.caption).foregroundStyle(.secondary)
                     }
                 }
-                Text("将删除该账户的 Keychain 凭证并停止同步。此操作不可撤销。")
+                Text(L10n.t("deleteAccount.ffcda38662"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
 
                 Toggle(isOn: $removeHistory) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("同时删除历史数据")
-                        Text("默认关闭：保留历史用量与余额快照，但不再展示于默认统计，也不再参与告警。")
+                        Text(L10n.t("deleteAccount.6633a293b2"))
+                        Text(L10n.t("deleteAccount.0a1581eea8"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -41,7 +41,7 @@ struct DeleteAccountSheet: View {
                 .toggleStyle(.checkbox)
 
                 if !removeHistory {
-                    Text("已保留的历史数据仍保存在本机数据库中，可在后续版本的历史查询或导出中查看。")
+                    Text(L10n.t("deleteAccount.6d4ca0bf06"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(8)
@@ -54,14 +54,14 @@ struct DeleteAccountSheet: View {
 
             Divider()
             HStack {
-                Button("取消") { dismiss() }
+                Button(L10n.t("common.cancel")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
                 Button(role: .destructive) {
                     model.deleteAccount(account, removeHistory: removeHistory)
                     dismiss()
                 } label: {
-                    Text("删除账户")
+                    Text(L10n.t("deleteAccount.9259840611"))
                 }
                 .buttonStyle(.borderedProminent)
             }

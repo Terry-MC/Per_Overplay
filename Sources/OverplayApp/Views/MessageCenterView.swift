@@ -35,7 +35,7 @@ struct MessageCenterView: View {
                 .foregroundStyle(.orange)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
-                    Text("消息中心").font(.title3.weight(.semibold))
+                    Text(L10n.t("messages.6ef1e2d287")).font(.title3.weight(.semibold))
                     if model.isDemo { DemoTag() }
                 }
                 Text(summary)
@@ -43,10 +43,10 @@ struct MessageCenterView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Text("顶部提示最多同时显示 3 条")
+            Text(L10n.t("messages.beb9ea28db"))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
-            Button("关闭") { dismiss() }
+            Button(L10n.t("common.close")) { dismiss() }
                 .keyboardShortcut(.cancelAction)
         }
         .padding(20)
@@ -58,41 +58,41 @@ struct MessageCenterView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
-                    TextField("搜索账户 / 类型 / 数值 / 阈值…", text: $searchText)
+                    TextField(L10n.t("messages.0abed08677"), text: $searchText)
                         .textFieldStyle(.roundedBorder)
                     if filtersActive {
-                        Button("清除筛选", action: resetFilters)
+                        Button(L10n.t("messages.4bbc4e5fd9"), action: resetFilters)
                             .buttonStyle(.link)
                     }
                 }
                 HStack(spacing: 14) {
-                    Picker("类型", selection: $typeFilter) {
+                    Picker(L10n.t("messages.e4e46c7235"), selection: $typeFilter) {
                         ForEach(MessageTypeFilter.allCases) { filter in
                             Text(filter.title).tag(filter)
                         }
                     }
                     .pickerStyle(.menu)
-                    Picker("账户", selection: $accountFilter) {
-                        Text("全部账户").tag(String?.none)
+                    Picker(L10n.t("core.csv.c3d92b20c8"), selection: $accountFilter) {
+                        Text(L10n.t("messages.c5e5d57837")).tag(String?.none)
                         ForEach(accountOptions) { option in
                             Text(option.name).tag(Optional(option.id))
                         }
                     }
                     .pickerStyle(.menu)
-                    Picker("状态", selection: $statusFilter) {
+                    Picker(L10n.t("messages.62e951a692"), selection: $statusFilter) {
                         ForEach(MessageStatusFilter.allCases) { filter in
                             Text(filter.title).tag(filter)
                         }
                     }
                     .pickerStyle(.menu)
-                    Picker("时间", selection: $timeFilter) {
+                    Picker(L10n.t("messages.89b4aa6364"), selection: $timeFilter) {
                         ForEach(MessageTimeFilter.allCases) { filter in
                             Text(filter.title).tag(filter)
                         }
                     }
                     .pickerStyle(.menu)
                     Spacer()
-                    Text("显示 \(filteredAlerts.count) / \(model.alerts.count) 条")
+                    Text(L10n.f("messages.930635c27e", filteredAlerts.count, model.alerts.count))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -106,18 +106,18 @@ struct MessageCenterView: View {
             SectionCard(isDemo: model.isDemo) {
                 EmptyStateView(
                     symbol: "tray",
-                    title: "暂无消息",
-                    message: "预算、余额、同步失败、凭据失效和数据过期告警会汇总在这里。"
+                    title: L10n.t("messages.30dfbcb488"),
+                    message: L10n.t("messages.796532a3c4")
                 )
             }
         } else if filteredAlerts.isEmpty {
             SectionCard(isDemo: model.isDemo) {
                 EmptyStateView(
                     symbol: "line.3.horizontal.decrease.circle",
-                    title: "没有匹配的消息",
-                    message: "试试清除筛选或调整关键词。"
+                    title: L10n.t("messages.bcc3236928"),
+                    message: L10n.t("messages.d9f404ddc2")
                 ) {
-                    Button("清除筛选", action: resetFilters)
+                    Button(L10n.t("messages.4bbc4e5fd9"), action: resetFilters)
                 }
             }
         } else {
@@ -136,11 +136,11 @@ struct MessageCenterView: View {
                 }
             }
             if model.alerts.count >= 200 {
-                Text("最多显示最近 200 条消息；完整记录保存在本地数据库。")
+                Text(L10n.t("messages.9587aaaeed"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            Text("顶部提示倒计时结束后会归档到这里；关闭顶部提示不会删除消息。")
+            Text(L10n.t("messages.f5e6f09a3b"))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
@@ -170,14 +170,14 @@ struct MessageCenterView: View {
 
     private var summary: String {
         if model.alerts.isEmpty {
-            return "暂无消息"
+            return L10n.t("messages.30dfbcb488")
         }
         var parts = [
-            "共 \(model.alerts.count) 条",
-            "未确认 \(model.unacknowledgedAlertCount) 条"
+            L10n.f("messages.c3ba901cd9", model.alerts.count),
+            L10n.f("messages.af497fcb34", model.unacknowledgedAlertCount)
         ]
         if filtersActive {
-            parts.append("筛选后 \(filteredAlerts.count) 条")
+            parts.append(L10n.f("messages.2eaf5c376d", filteredAlerts.count))
         }
         return parts.joined(separator: " · ")
     }

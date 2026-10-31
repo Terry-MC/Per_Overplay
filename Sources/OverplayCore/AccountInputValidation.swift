@@ -9,10 +9,14 @@ public enum AccountValidationError: Error, Equatable, LocalizedError, Sendable {
 
     public var errorDescription: String? {
         switch self {
-        case .emptyCredential: return "API Key / Management Key 不能为空"
-        case .duplicateName: return "同厂商下已存在同名账户，请使用不同显示名称"
-        case .missingGenericConfig: return "通用 HTTP 缺少端点配置"
-        case .missingMapping: return "通用 HTTP 至少配置一个余额 / 额度 / 用量映射字段"
+        case .emptyCredential:
+            return L10n.t("core.validation.c53fdaf1a3")
+        case .duplicateName:
+            return L10n.t("app.b1c29cc952")
+        case .missingGenericConfig:
+            return L10n.t("core.validation.5400a6a9c4")
+        case .missingMapping:
+            return L10n.t("core.validation.3530e92d40")
         case .invalidGenericConfig(let error):
             return error.errorDescription
         }

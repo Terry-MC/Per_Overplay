@@ -37,6 +37,7 @@ struct DashboardView: View {
         }
         .frame(minWidth: 1080, minHeight: 700)
         .background(Color(nsColor: .windowBackgroundColor))
+        .environment(\.locale, model.effectiveLocale)
         .overlay(alignment: .topTrailing) {
             ToastStackView(model: model)
                 .padding(.top, model.isDemo ? 150 : 112)
@@ -63,6 +64,15 @@ struct DashboardView: View {
         }
     }
 
+    private func requestEditAccount(_ account: Account) {
+        if account.provider == .genericHTTP {
+            model.selectedTab = .addProvider
+            model.debugEditAccountId = account.id
+        } else {
+            editAccount = account
+        }
+    }
+
     private var header: some View {
         HStack(spacing: 12) {
             HStack(spacing: 10) {
@@ -83,14 +93,14 @@ struct DashboardView: View {
             if !model.showOnboarding || model.isDemo {
                 Button {
                     guard !model.hasUnsavedChanges
-                        || AppPanels.confirmDiscardUnsaved(model: model, action: "切换到简略版") else {
+                        || AppPanels.confirmDiscardUnsaved(model: model, action: L10n.t("appDelegate.f9f838cb05")) else {
                         return
                     }
                     onSwitchToFloating()
                 } label: {
-                    Label("简略版", systemImage: "rectangle.on.rectangle")
+                    Label(L10n.t("dashboard.616ab19888"), systemImage: "rectangle.on.rectangle")
                 }
-                .help("切换到简略版悬浮窗")
+                .help(L10n.t("dashboard.b71d572be1"))
                 Button {
                     model.showMessageCenter = true
                 } label: {
@@ -100,7 +110,7 @@ struct DashboardView: View {
                                 ? "bell.badge.fill"
                                 : "bell"
                         )
-                        Text("消息")
+                        Text(L10n.t("dashboard.dc6de3fa86"))
                         if model.unacknowledgedAlertCount > 0 {
                             Text(
                                 model.unacknowledgedAlertCount > 99
@@ -115,18 +125,18 @@ struct DashboardView: View {
                         }
                     }
                 }
-                .help("打开消息中心")
+                .help(L10n.t("dashboard.4d7ebd8d8f"))
                 Button {
                     model.refreshAll()
                 } label: {
-                    Label("刷新全部", systemImage: "arrow.clockwise")
+                    Label(L10n.t("common.refreshAll"), systemImage: "arrow.clockwise")
                 }
                 .disabled(model.isDemo || model.accounts.isEmpty)
                 if !model.isDemo {
                     Button {
                         model.selectedTab = .addProvider
                     } label: {
-                        Label("添加账户", systemImage: "plus")
+                        Label(L10n.t("dashboard.c771c7d8e2"), systemImage: "plus")
                     }
                 }
             }
@@ -139,14 +149,14 @@ struct DashboardView: View {
     private var subtitle: String {
         let base: String
         if model.isDemo {
-            base = "演示模式 · 固定本地模拟数据 · 不发起网络请求"
+            base = L10n.t("dashboard.d5a8c28716")
         } else if model.accounts.isEmpty {
-            base = "数据仅保存在本机 · 密钥仅存 Keychain"
+            base = L10n.t("dashboard.3d56cbaef0")
         } else {
-            base = "\(model.accounts.count) 个账户 · 自动刷新每 \(model.settings.refreshIntervalMinutes) 分钟"
+            base = L10n.f("dashboard.f2edf0faaa", model.accounts.count, model.settings.refreshIntervalMinutes)
         }
         if let last = model.lastRefreshAllAt {
-            return base + " · 最近操作 " + DateFormatters.shortTime.string(from: last)
+            return base + L10n.t("dashboard.bdd1d3aedf") + DateFormatters.shortTime.string(from: last)
         }
         return base
     }
@@ -158,7 +168,7 @@ struct DashboardView: View {
                     if model.selectedTab == .addProvider,
                        model.hasUnsavedChanges,
                        tab != .addProvider,
-                       !AppPanels.confirmDiscardUnsaved(model: model, action: "切换页签") {
+                       !AppPanels.confirmDiscardUnsaved(model: model, action: L10n.t("dashboard.e219258855")) {
                         return
                     }
                     model.selectedTab = tab
@@ -197,7 +207,7 @@ struct DashboardView: View {
         case .overview:
             BaseInfoView(
                 model: model,
-                onEdit: { editAccount = $0 },
+                onEdit: { requestEditAccount($0) },
                 onDelete: { deleteAccount = $0 }
             )
         case .usage:
@@ -214,7 +224,7 @@ struct DashboardView: View {
             SettingsView(
                 model: model,
                 onAddAccount: { model.selectedTab = .addProvider },
-                onEditAccount: { editAccount = $0 },
+                onEditAccount: { requestEditAccount($0) },
                 onDeleteAccount: { deleteAccount = $0 }
             )
         }

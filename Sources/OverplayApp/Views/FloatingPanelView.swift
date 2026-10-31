@@ -7,10 +7,12 @@ import OverplayCore
 @MainActor
 final class FloatingSummaryCache {
     private var cached: FloatingSummary?
+    private var cachedRevision: UUID?
     private(set) var buildCount = 0
 
     func summary(for model: AppModel, isVisible: Bool) -> FloatingSummary {
-        if !isVisible, let cached { return cached }
+        let revision = model.localizationRevision
+        if !isVisible, let cached, cachedRevision == revision { return cached }
         buildCount += 1
         let summary = FloatingSummaryBuilder.make(
             accounts: model.accounts,
@@ -21,6 +23,7 @@ final class FloatingSummaryCache {
             now: model.now
         )
         cached = summary
+        cachedRevision = revision
         return summary
     }
 }
@@ -52,6 +55,7 @@ struct FloatingPanelView: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .preferredColorScheme(nil)
+            .environment(\.locale, model.effectiveLocale)
     }
 
     private var panelContent: some View {
@@ -89,22 +93,22 @@ struct FloatingPanelView: View {
             HStack(spacing: 4) {
                 panelButton(
                     symbol: "xmark",
-                    help: "退出 Overplay",
+                    help: L10n.t("statusBar.d94cefe4dc"),
                     action: onClose
                 )
                 panelButton(
                     symbol: density == .expanded ? "chevron.up" : "chevron.down",
-                    help: density == .expanded ? "折叠为压缩视图" : "展开为完整视图",
+                    help: density == .expanded ? L10n.t("floating.4c2abdc86a") : L10n.t("floating.e17ce1d5bf"),
                     action: onToggleDensity
                 )
                 panelButton(
                     symbol: "minus.circle",
-                    help: "收起悬浮窗到菜单栏",
+                    help: L10n.t("floating.322c66c022"),
                     action: onCollapse
                 )
                 panelButton(
                     symbol: "arrow.up.right.square",
-                    help: "打开完整版主窗口",
+                    help: L10n.t("floating.3f73472136"),
                     action: onOpenMain
                 )
             }
@@ -116,17 +120,17 @@ struct FloatingPanelView: View {
     private var headerSubtitle: String {
         var parts: [String] = []
         if model.accounts.isEmpty {
-            parts.append("暂无账户")
+            parts.append(L10n.t("floating.d125522fc6"))
         } else {
-            parts.append("\(summary.activeAccountCount) 个启用账户")
+            parts.append(L10n.f("floating.aacf67bc4e", summary.activeAccountCount))
             if summary.disabledAccountCount > 0 {
-                parts.append("\(summary.disabledAccountCount) 个禁用")
+                parts.append(L10n.f("floating.ee0e49457f", summary.disabledAccountCount))
             }
         }
         if let lastSync = summary.lastSyncAt {
-            parts.append("更新 \(DateFormatters.shortTime.string(from: lastSync))")
+            parts.append(L10n.f("floating.0147d5a3b6", DateFormatters.shortTime.string(from: lastSync)))
         } else {
-            parts.append("尚未同步")
+            parts.append(L10n.t("health.neverSynced"))
         }
         return parts.joined(separator: " · ")
     }
@@ -156,7 +160,7 @@ struct FloatingPanelView: View {
                         Image(systemName: "sun.max.fill")
                             .font(.system(size: 10))
                             .foregroundStyle(.orange)
-                        Text("今日费用")
+                        Text(L10n.t("floating.b11b32b438"))
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(.secondary)
                         if !summary.todayStatus.isActual, let icon = summary.todayStatus.iconName {
@@ -178,7 +182,7 @@ struct FloatingPanelView: View {
                         }
                     } else {
                         HStack(spacing: 5) {
-                            Text(summary.todayStatus.isMissing ? "今日无记录" : summary.todayStatus.emptyLabel)
+                            Text(summary.todayStatus.isMissing ? L10n.t("floating.92ed395e3f") : summary.todayStatus.emptyLabel)
                                 .font(.system(size: 17, weight: .semibold))
                                 .foregroundStyle(.secondary)
                             Image(systemName: summary.todayStatus.iconName ?? "tray")
@@ -194,14 +198,14 @@ struct FloatingPanelView: View {
             Divider().opacity(0.45)
             HStack(alignment: .top, spacing: 0) {
                 snapshotColumn(
-                    title: "官方余额",
+                    title: L10n.t("core.floatingSummary.f5f1ad2311"),
                     symbol: "creditcard",
                     status: summary.balancesStatus,
                     rows: balanceRows
                 )
                 Divider().frame(height: 52).padding(.horizontal, 10)
                 snapshotColumn(
-                    title: "官方额度",
+                    title: L10n.t("core.floatingSummary.f625451199"),
                     symbol: "gauge.with.dots.needle.50percent",
                     status: summary.creditsStatus,
                     rows: creditRows
@@ -234,16 +238,16 @@ struct FloatingPanelView: View {
                         )
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(summary.criticalAlertCount > 0 ? Color.red : Color.orange)
-                        Text(summary.criticalAlertCount > 0 ? "警戒 / 未确认" : "未确认")
+                        Text(summary.criticalAlertCount > 0 ? L10n.t("floating.d85ef4e514") : L10n.t("core.messages.0642fa2988"))
                             .font(.system(size: 8))
                             .foregroundStyle(.secondary)
                     }
                 }
                 .buttonStyle(.plain)
-                .help("打开消息中心")
-                .accessibilityLabel("未确认消息 \(summary.unacknowledgedAlertCount) 条")
+                .help(L10n.t("dashboard.4d7ebd8d8f"))
+                .accessibilityLabel(L10n.f("floating.75baa8f30e", summary.unacknowledgedAlertCount))
             } else {
-                Label("无告警", systemImage: "checkmark.circle")
+                Label(L10n.t("floating.61e269413e"), systemImage: "checkmark.circle")
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
             }
@@ -280,7 +284,7 @@ struct FloatingPanelView: View {
                         .help(row.0)
                 }
             } else {
-                Text(status.isActual ? "无数据" : status.emptyLabel)
+                Text(status.isActual ? L10n.t("dataStatus.6ffa7e6d35") : status.emptyLabel)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -296,7 +300,7 @@ struct FloatingPanelView: View {
                 Image(systemName: "number")
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
-                Text("Token / 请求")
+                Text(L10n.t("floating.1bac85732d"))
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.secondary)
                 if !summary.tokenStatus.isActual, let icon = summary.tokenStatus.iconName {
@@ -311,12 +315,12 @@ struct FloatingPanelView: View {
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
-                Text("覆盖 \(summary.tokenAccounts)/\(summary.totalAccounts)")
+                Text(L10n.f("floating.bd9ae6258a", summary.tokenAccounts, summary.totalAccounts))
                     .font(.system(size: 8))
                     .foregroundStyle(.secondary)
                 Text(summary.requestsAvailable
-                     ? "\(Money.formatCompactInteger(summary.requestCount)) 次请求"
-                     : "请求数未提供")
+                     ? L10n.f("floating.9c7b978970", Money.formatCompactInteger(summary.requestCount))
+                     : L10n.t("floating.317d982d2d"))
                     .font(.system(size: 8))
                     .foregroundStyle(.tertiary)
             } else {
@@ -344,26 +348,26 @@ struct FloatingPanelView: View {
     private var accountsSection: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 8) {
-                Text("账户").font(.subheadline.weight(.semibold))
+                Text(L10n.t("core.csv.c3d92b20c8")).font(.subheadline.weight(.semibold))
                 Text("\(model.accounts.count)").font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button {
                     model.refreshAll()
                 } label: {
-                    Label("刷新", systemImage: "arrow.clockwise")
+                    Label(L10n.t("providerDetail.38108eaa1d"), systemImage: "arrow.clockwise")
                         .font(.caption)
                 }
                 .buttonStyle(.link)
                 .disabled(model.isDemo || model.accounts.isEmpty)
-                .help(model.isDemo ? "演示模式不发起网络请求" : "刷新全部账户")
+                .help(model.isDemo ? L10n.t("floating.280880b4de") : L10n.t("floating.d67c7bf730"))
             }
             if model.accounts.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("暂无监控账户").font(.callout.weight(.semibold))
-                    Text("在完整版中添加 DeepSeek 或 OpenRouter 账户后，悬浮窗会显示今日费用、余额与告警。")
+                    Text(L10n.t("floating.a65f750ed3")).font(.callout.weight(.semibold))
+                    Text(L10n.t("floating.7b0ed52c26"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Button("打开完整版", action: onOpenMain)
+                    Button(L10n.t("floating.549cf8c0c8"), action: onOpenMain)
                         .buttonStyle(.link)
                         .font(.caption)
                 }
@@ -373,11 +377,11 @@ struct FloatingPanelView: View {
                     HStack(spacing: 6) {
                         Image(systemName: "pause.circle.fill")
                             .foregroundStyle(.orange)
-                        Text("所有账户均已禁用；后台不会刷新或告警。")
+                        Text(L10n.t("floating.bbde6bf66a"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Button("打开完整版", action: onOpenMain)
+                        Button(L10n.t("floating.549cf8c0c8"), action: onOpenMain)
                             .buttonStyle(.link)
                             .font(.caption)
                     }
@@ -421,7 +425,7 @@ struct FloatingPanelView: View {
                                 .foregroundStyle(row.criticalAlerts > 0 ? Color.red : Color.orange)
                         }
                         if !row.enabled {
-                            Text("已禁用").foregroundStyle(.secondary)
+                            Text(L10n.t("health.disabled")).foregroundStyle(.secondary)
                         }
                     }
                     .font(.system(size: 9))
@@ -438,8 +442,8 @@ struct FloatingPanelView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .disabled(model.isDemo || !row.enabled)
-                .help(model.isDemo ? "演示模式不发起网络请求" : "刷新 \(row.name)")
-                .accessibilityLabel("刷新 \(row.name)")
+                .help(model.isDemo ? L10n.t("floating.280880b4de") : L10n.f("floating.c8fdfe3f3c", row.name))
+                .accessibilityLabel(L10n.f("floating.c8fdfe3f3c", row.name))
             }
 
             if row.primaryStatus.isActual, !row.primaryLines.isEmpty {
@@ -483,13 +487,13 @@ struct FloatingPanelView: View {
                     }
                 }
                 if let error = row.errorSummary {
-                    Text(error)
+                    Text(L10n.t(error))
                         .font(.system(size: 9))
                         .foregroundStyle(.orange)
                         .lineLimit(2)
                 }
                 if let last = row.lastSuccessAt {
-                    Text("更新 \(DateFormatters.shortTime.string(from: last))")
+                    Text(L10n.f("floating.0147d5a3b6", DateFormatters.shortTime.string(from: last)))
                         .font(.system(size: 8))
                         .foregroundStyle(.tertiary)
                 }
@@ -511,7 +515,7 @@ struct FloatingPanelView: View {
         HStack(spacing: 2) {
             Image(systemName: status.isActual ? "checkmark.circle.fill" : (status.iconName ?? "tray"))
                 .foregroundStyle(status.isActual ? Color.green : status.tint)
-            Text(status.isActual ? "正常" : status.emptyLabel)
+            Text(status.isActual ? L10n.t("health.normal") : status.emptyLabel)
                 .foregroundStyle(status.isActual ? Color.secondary : status.tint)
         }
         .help(status.reason ?? "")
@@ -519,11 +523,11 @@ struct FloatingPanelView: View {
 
     private var footer: some View {
         HStack(spacing: 8) {
-            Button("打开完整版", action: onOpenMain)
+            Button(L10n.t("floating.549cf8c0c8"), action: onOpenMain)
                 .buttonStyle(.link)
                 .font(.caption)
             Spacer()
-            Text("\(model.settings.refreshIntervalMinutes) 分钟自动刷新")
+            Text(L10n.f("floating.94bfadcf4a", model.settings.refreshIntervalMinutes))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }

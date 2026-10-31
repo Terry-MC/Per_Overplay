@@ -6,30 +6,30 @@ public enum AccountDataStatus {
         balances: [BalanceSnapshot]
     ) -> DataStatus {
         if !account.enabled {
-            return .unavailable("该账户已禁用")
+            return .unavailable(L10n.t("core.accountStatus.c07a0777f9"))
         }
         if account.credentialInvalid {
-            return .failed("凭据失效：\(account.lastError ?? "需要重新输入 API Key")")
+            return .failed(L10n.f("app.29dd8b4768", L10n.t(account.lastError ?? L10n.t("credential.fallback.apiKey"))))
         }
         if let error = account.lastError?.trimmingCharacters(in: .whitespacesAndNewlines),
            !error.isEmpty {
             return balances.isEmpty
-                ? .failed("同步失败：\(error)")
-                : .partial("同步失败：\(error)")
+                ? .failed(L10n.f("app.b3c04fc986", L10n.t(error)))
+                : .partial(L10n.f("app.b3c04fc986", L10n.t(error)))
         }
         guard account.capabilities.balance else {
-            return .unavailable("\(account.provider.displayName) 不提供官方余额")
+            return .unavailable(L10n.f("core.accountStatus.8e13d1bfd2", account.provider.displayName))
         }
         guard !balances.isEmpty else {
             if account.lastSuccessAt == nil {
-                return .missing("尚未成功同步余额")
+                return .missing(L10n.t("core.accountStatus.17acb0eaf2"))
             }
-            return .missing("厂商未返回余额数据")
+            return .missing(L10n.t("core.accountStatus.f0434eb0ef"))
         }
         let unavailable = balances.filter { $0.isAvailable == false }
         if !unavailable.isEmpty {
             let codes = unavailable.map(\.currency).sorted().joined(separator: " / ")
-            return .anomaly("官方标记 \(codes) 余额不可用；请检查账户状态")
+            return .anomaly(L10n.f("core.accountStatus.2220119e5e", codes))
         }
         return .actual
     }
@@ -39,25 +39,25 @@ public enum AccountDataStatus {
         quota: QuotaSnapshot?
     ) -> DataStatus {
         if !account.enabled {
-            return .unavailable("该账户已禁用")
+            return .unavailable(L10n.t("core.accountStatus.c07a0777f9"))
         }
         if account.credentialInvalid {
-            return .failed("凭据失效：\(account.lastError ?? "需要重新输入 API Key")")
+            return .failed(L10n.f("app.29dd8b4768", L10n.t(account.lastError ?? L10n.t("credential.fallback.apiKey"))))
         }
         if let error = account.lastError?.trimmingCharacters(in: .whitespacesAndNewlines),
            !error.isEmpty {
             return quota == nil
-                ? .failed("同步失败：\(error)")
-                : .partial("同步失败：\(error)")
+                ? .failed(L10n.f("app.b3c04fc986", L10n.t(error)))
+                : .partial(L10n.f("app.b3c04fc986", L10n.t(error)))
         }
         guard account.capabilities.credits else {
-            return .unavailable("\(account.provider.displayName) 不提供官方额度")
+            return .unavailable(L10n.f("core.accountStatus.980ff56512", account.provider.displayName))
         }
         guard quota != nil else {
             if account.lastSuccessAt == nil {
-                return .missing("尚未成功同步官方额度")
+                return .missing(L10n.t("core.accountStatus.772a7f6811"))
             }
-            return .missing("厂商未返回官方额度数据")
+            return .missing(L10n.t("core.accountStatus.a5fe066fef"))
         }
         return .actual
     }
@@ -67,20 +67,20 @@ public enum AccountDataStatus {
         spend: Decimal?
     ) -> DataStatus {
         guard account.budget != nil else {
-            return .unavailable("未设置本地预算")
+            return .unavailable(L10n.t("core.accountStatus.fa29ac2cb7"))
         }
         if !account.enabled {
-            return .unavailable("该账户已禁用")
+            return .unavailable(L10n.t("core.accountStatus.c07a0777f9"))
         }
         if account.credentialInvalid {
-            return .failed("凭据失效：\(account.lastError ?? "需要重新输入 API Key")")
+            return .failed(L10n.f("app.29dd8b4768", L10n.t(account.lastError ?? L10n.t("credential.fallback.apiKey"))))
         }
         if let error = account.lastError?.trimmingCharacters(in: .whitespacesAndNewlines),
            !error.isEmpty {
-            return .partial("同步失败：\(error)")
+            return .partial(L10n.f("app.b3c04fc986", L10n.t(error)))
         }
         guard spend != nil else {
-            return .partial("本月用量数据不完整，暂不能计算预算")
+            return .partial(L10n.t("core.accountStatus.eae7a53e98"))
         }
         return .actual
     }
@@ -92,7 +92,7 @@ public enum AccountDataStatus {
     ) -> DataStatus {
         guard !accounts.isEmpty else { return .missing(emptyReason) }
         let enabled = accounts.filter(\.enabled)
-        guard !enabled.isEmpty else { return .unavailable("所选账户均已禁用") }
+        guard !enabled.isEmpty else { return .unavailable(L10n.t("core.accountStatus.b61f5e75da")) }
 
         let statuses = enabled.map { account in
             usage(account: account, records: records)
@@ -101,24 +101,24 @@ public enum AccountDataStatus {
     }
 
     public static func usage(account: Account, records: [UsageRecord]) -> DataStatus {
-        if !account.enabled { return .unavailable("该账户已禁用") }
+        if !account.enabled { return .unavailable(L10n.t("core.accountStatus.c07a0777f9")) }
         if account.credentialInvalid {
-            return .failed("凭据失效：\(account.lastError ?? "需要重新输入 API Key")")
+            return .failed(L10n.f("app.29dd8b4768", L10n.t(account.lastError ?? L10n.t("credential.fallback.apiKey"))))
         }
         if let error = account.lastError?.trimmingCharacters(in: .whitespacesAndNewlines),
            !error.isEmpty {
             return account.lastSuccessAt == nil
-                ? .failed("同步失败：\(error)")
-                : .partial("同步失败：\(error)")
+                ? .failed(L10n.f("app.b3c04fc986", L10n.t(error)))
+                : .partial(L10n.f("app.b3c04fc986", L10n.t(error)))
         }
         guard account.capabilities.usage else {
-            return .unavailable("\(account.provider.displayName) 不提供历史用量")
+            return .unavailable(L10n.f("core.accountStatus.fb0dfb6f9e", account.provider.displayName))
         }
         guard account.lastSuccessAt != nil else {
-            return .missing("尚未成功同步用量")
+            return .missing(L10n.t("core.accountStatus.1088770bda"))
         }
         guard records.contains(where: { $0.accountId == account.id }) else {
-            return .missing("已连接，但厂商未返回用量数据")
+            return .missing(L10n.t("core.accountStatus.ca45da3378"))
         }
         return .actual
     }
@@ -127,7 +127,7 @@ public enum AccountDataStatus {
         guard !statuses.isEmpty else { return .missing(emptyReason) }
         if statuses.allSatisfy(\.isActual) { return .actual }
         let reasons = statuses.compactMap(\.reason)
-        let joined = reasons.joined(separator: "；")
+        let joined = reasons.joined(separator: L10n.t("common.listSeparator"))
         if statuses.contains(where: \.isActual) { return .partial(joined) }
         if statuses.contains(where: \.isPartial) { return .partial(joined) }
         if statuses.contains(where: \.isFailed) { return .failed(joined) }

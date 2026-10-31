@@ -52,11 +52,11 @@ open DSOverplay.app        # 启动菜单栏应用
 - 单账户刷新失败不影响其他账户数据、同一账户 single-flight，以及 429 / Retry-After 后手动刷新冷却；
 - 删除一个账户（保留 / 删除历史两种模式）不会影响其他账户的账户、凭据、用量、余额与额度数据。
 
-当前共 **160 项 XCTest**，全部通过。
+当前共 **183 项 XCTest**，全部通过。
 
-另提供应用内自动化验证：`--demo --switch-smoke` 覆盖主窗口 / 悬浮窗切换、折叠、收起、消息中心、五个 Tab 切换、厂商详情打开与托盘面板路径，断言 0 次刷新调用与 0 个网络请求；`--demo --collapse-floating --auto-quit-after N` 用于收起后空闲 CPU 采样。`--demo --show --detail-account <account-id>` 可直接打开指定账户详情截图；`--window-width 1080` 可验证最小窗口宽度下的平台栏换行；`--demo --tab addProvider --alert-line-account <account-id> --snapshot <path>` 可直接截取告警线编辑器。
+另提供应用内自动化验证：`--demo --switch-smoke` 覆盖主窗口 / 悬浮窗切换、折叠、收起、消息中心、五个 Tab 切换、厂商详情打开与托盘面板路径，断言 0 次刷新调用与 0 个网络请求；`--demo --collapse-floating --auto-quit-after N` 用于收起后空闲 CPU 采样。`--demo --show --detail-account <account-id>` 可直接打开指定账户详情截图；`--window-width 1080` 可验证最小窗口宽度下的平台栏换行；`--language <system|zh-Hans|zh-Hant|en|pack-locale>` 可生成指定语言截图；`--demo --tab addProvider --alert-line-account <account-id> --snapshot <path>` 可直接截取告警线编辑器。
 
-新增覆盖：通用 HTTP 配置 / JSON 映射 / SSRF 校验 / 连接测试失败分类（403 / 429 / 400 / 404 / 405 / 超时 / 网络 / 重定向 / 畸形）、表单必填 / 重复 / URL 校验、通用 HTTP 账户状态 / 余额与额度聚合 / 预算集成、账户 profile 与公共告警线持久化、三态阈值传播、预算 / 配额 / 余额 / Token 四类告警线、去重 / 恢复 / 新自然月重新布防、托盘与 toast 告警线级别。本轮界面验收项——平台筛选栏最小宽度自动换行、必填标识与保存禁用原因、官方品牌图标浅色 / 深色显示——通过截图与可重复手工步骤验证，未纳入 XCTest。Keychain 无明文沿用既有测试；未保存退出确认与跨视图 UI 一致性仍为手工验证项。
+新增覆盖：通用 HTTP 配置 / JSON 映射 / SSRF 校验 / 连接测试失败分类（403 / 429 / 400 / 404 / 405 / 超时 / 网络 / 重定向 / 畸形）、表单必填 / 重复 / URL 校验、通用 HTTP 账户状态 / 余额与额度聚合 / 预算集成、账户 profile 与公共告警线持久化、三态阈值传播、预算 / 配额 / 余额 / Token 四类告警线、去重 / 恢复 / 新自然月重新布防、托盘与 toast 告警线级别；多语言覆盖语言解析 / 回退、内置目录完整性、语言包导入 / 校验 / 持久化 / 移除、缺失 key、错误文案本地化、告警 templateKey 重渲染、日期 / 金额格式化；设置持久化与清除数据覆盖 `DatabaseTests`。平台筛选栏换行、官方品牌图标、三语言布局、1080 新增厂商布局通过截图与手工步骤验证；真实系统通知权限 / 投递、设置页文件选择器点击、真实 Keychain 账户编辑 / 删除、清除数据 UI 点击、未保存退出与跨视图 UI 一致性仍为手工验证项。
 
 ## 功能范围
 
@@ -75,6 +75,8 @@ open DSOverplay.app        # 启动菜单栏应用
 - **消息中心**：顶部最多同时显示 3 条消息并叠加显示，不挤压布局；error 类消息（预算已用尽、余额低于阈值、同步失败、凭据失效）需手动关闭，预算 80% 通知倒计时后归档，普通告知倒计时后关闭，不显示进度条。消息中心从顶部消息、基础信息或额度与预算页打开，支持搜索、类型 / 账户 / 状态 / 时间筛选、确认与未确认计数；基础信息 / 额度与预算不再各自维护旧告警列表。演示来源消息持续标注「演示数据」。
 - **预算与告警**：本地月度预算（80% / 100%；真实模式当前为 OpenRouter，演示模式还覆盖 Kimi、GLM、Qwen、OpenAI、Anthropic、Mistral）、DeepSeek 余额低水位、连续 3 次同步失败、凭据失效、超过 2 个刷新周期未成功同步；应用内消息中心 + 本地通知；同一预算阈值同月只触发一次，余额回升后重新布防，同步失败冷却 6 小时。
 - **刷新**：全部 / 单账户手动刷新；自动刷新默认 15 分钟（5–60 分钟可配置）；指数退避与 Retry-After；429 / 受限请求会按 Retry-After 阻止手动重复刷新并显示剩余秒数；同一账户 single-flight；同步不阻塞 UI。
+- **多语言与语言包**：内置简中 / 繁中 / 英文，默认跟随系统，不支持时回退简中；设置页即时切换并持久化。主菜单 / 托盘提供全局语言切换，切换时不离开当前 Tab，保留未保存表单与滚动位置。主窗口、悬浮窗、托盘、消息中心、告警、空状态、错误、日期 / 数字 / 币种格式同步更新。支持导入本地 JSON 语言包（UTF-8、≤1MB、formatVersion / locale / displayName / fallbackLocale / appVersionRange / strings），校验失败不改当前语言；缺失 key 按回退链回退，可移除导入语言包，内置语言不可删除。格式与安全校验见 [`docs/localization.md`](docs/localization.md)，示例见 [`docs/examples/language-pack-ja.json`](docs/examples/language-pack-ja.json)。
+- **设置页**：语言、刷新与通知、账户管理、演示模式、数据与隐私、关于、退出。通知开关真实持久化并显示系统权限状态；权限被拒绝时关闭本地通知并引导到系统设置。账户列表可编辑 / 删除（演示模式禁用并说明原因）；支持导出 CSV；清除全部本地数据需两次确认，并询问是否同时删除导入的语言包。
 - **退出**：悬浮窗关闭、托盘、设置页、菜单栏与系统退出统一清理；停止定时器 / 请求、保存窗口状态、关闭窗口并移除托盘；新增厂商表单未保存时，切换 Tab、切到简略版、关闭主窗口、退出（含 AppleScript / 系统退出）都会确认，取消则保留内容。
 - **演示模式**：悬浮窗、托盘和主窗口共享 14 个平台 / 16 个账户、30 个完整 UTC 日的虚拟数据与告警；DeepSeek 含 CNY / USD 两个账户，Kimi 含主账户 / 团队账户；其余平台包括 OpenRouter、GLM、MiniMax、Qwen、豆包 Seed、腾讯混元、OpenAI GPT、Anthropic Claude、Google Gemini、Meta Llama、xAI Grok、Mistral。所有演示内容持续标注「演示数据」，导出文件带 `demo` 标记；**不发起外部网络请求、不读写 Keychain、不打开真实数据库**。演示用量仅覆盖最近 30 个完整 UTC 日（不含今天），因此「今日费用」等当天视图会如实显示空状态。
 
@@ -84,9 +86,21 @@ open DSOverplay.app        # 启动菜单栏应用
 | --- | --- |
 | ![悬浮窗展开](docs/screenshots/floating-expanded.png) | ![悬浮窗压缩](docs/screenshots/floating-compact.png) |
 
-| 托盘右键菜单（演示标识） | 基础信息（默认页：范围 / 覆盖率 / 厂商卡片） |
+| 托盘右键菜单（演示标识） | 基础信息（简中，默认页） |
 | --- | --- |
 | ![托盘菜单](docs/screenshots/tray-menu.png) | ![基础信息](docs/screenshots/overview.png) |
+
+| 基础信息（English） | 基础信息（繁體中文） |
+| --- | --- |
+| ![English overview](docs/screenshots/overview-en.png) | ![繁體中文 overview](docs/screenshots/overview-hant.png) |
+
+| 设置（简中：语言 / 通知 / 账户） | 设置（English） | 设置（繁體中文） |
+| --- | --- | --- |
+| ![设置简中](docs/screenshots/settings.png) | ![Settings English](docs/screenshots/settings-en.png) | ![設定繁體中文](docs/screenshots/settings-hant.png) |
+
+| 导入日本語语言包（缺失 key 回退简中） | 新增厂商（English，1080 宽布局） |
+| --- | --- |
+| ![日本語语言包](docs/screenshots/settings-ja.png) | ![Add Provider English 1080](docs/screenshots/add-provider-en-1080.png) |
 
 | 新增厂商（必填标识 / 保存原因 / 官方图标） | 告警线编辑器（校验提示 / 演示禁用原因） |
 | --- | --- |
@@ -132,7 +146,7 @@ open DSOverplay.app        # 启动菜单栏应用
 - 错误信息与厂商返回的错误摘要会脱敏 Authorization / Key；界面不提供 Key 明文回显。
 - 退出时停止定时器、取消进行中的请求并退出；关闭主窗口不会退出应用。
 - 删除账户会删除 Keychain 凭证，并提供「同时删除历史数据」选项（默认关闭，保留但不参与默认统计）。
-- 「清除全部本地数据」需要两次确认，会删除账户、Keychain 凭证、历史用量、快照、告警与设置。演示模式需先退出，避免触碰真实数据。
+- 「清除全部本地数据」需要两次确认，会删除账户、Keychain 凭证、历史用量、快照、告警与设置，并询问是否同时删除导入的语言包；语言偏好恢复为跟随系统。演示模式需先退出，避免触碰真实数据。
 
 ## 演示模式
 

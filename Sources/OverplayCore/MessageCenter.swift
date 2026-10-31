@@ -13,13 +13,13 @@ public enum MessageTypeFilter: String, CaseIterable, Identifiable, Sendable {
 
     public var title: String {
         switch self {
-        case .all: return "全部类型"
-        case .budget: return "预算"
-        case .balance: return "余额"
-        case .threshold: return "告警线"
-        case .sync: return "同步失败"
-        case .credential: return "凭据"
-        case .stale: return "数据过期"
+        case .all: return L10n.t("core.messages.fa6968d9f0")
+        case .budget: return L10n.t("metric.budget")
+        case .balance: return L10n.t("metric.balance")
+        case .threshold: return L10n.t("metric.alertLine")
+        case .sync: return L10n.t("metric.syncFailure")
+        case .credential: return L10n.t("metric.credential")
+        case .stale: return L10n.t("metric.stale")
         }
     }
 
@@ -45,9 +45,9 @@ public enum MessageStatusFilter: String, CaseIterable, Identifiable, Sendable {
 
     public var title: String {
         switch self {
-        case .all: return "全部状态"
-        case .unread: return "未确认"
-        case .read: return "已确认"
+        case .all: return L10n.t("core.messages.1a4c26d92d")
+        case .unread: return L10n.t("core.messages.0642fa2988")
+        case .read: return L10n.t("core.messages.d9fea67ad2")
         }
     }
 
@@ -70,10 +70,10 @@ public enum MessageTimeFilter: String, CaseIterable, Identifiable, Sendable {
 
     public var title: String {
         switch self {
-        case .all: return "全部时间"
-        case .today: return "今天"
-        case .week: return "近 7 天"
-        case .month: return "近 30 天"
+        case .all: return L10n.t("core.messages.2d25878062")
+        case .today: return L10n.t("core.messages.17e83cc25e")
+        case .week: return L10n.t("core.messages.f297b996de")
+        case .month: return L10n.t("core.messages.00a0a58be6")
         }
     }
 
@@ -166,11 +166,14 @@ public enum MessageCenter {
         let needle = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return true }
         return [
-            alert.kind.title,
+            alert.renderedTitle,
             alert.accountName,
             alert.value,
             alert.threshold,
-            alert.metric
+            alert.renderedValue,
+            alert.renderedThreshold,
+            alert.metric,
+            AlertMetricText.localized(alert.metric)
         ].contains { $0.localizedCaseInsensitiveContains(needle) }
     }
 }

@@ -15,11 +15,11 @@ enum DashboardTab: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .overview: return "基础信息"
-        case .usage: return "用量分析"
-        case .quota: return "额度与预算"
-        case .addProvider: return "新增厂商"
-        case .settings: return "设置"
+        case .overview: return L10n.t("dashboard.overview")
+        case .usage: return L10n.t("dashboard.usage")
+        case .quota: return L10n.t("dashboard.quota")
+        case .addProvider: return L10n.t("dashboard.addProvider")
+        case .settings: return L10n.t("dashboard.settings")
         }
     }
 
@@ -65,14 +65,14 @@ enum AppActionError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .demoReadOnly: return "演示模式不可修改真实账户或凭证"
-        case .emptyName: return "账户名称不能为空"
-        case .emptyKey: return "API Key 不能为空"
-        case .invalidAmount: return "请输入大于 0 的金额"
+        case .demoReadOnly: return L10n.t("app.cce1d224b1")
+        case .emptyName: return L10n.t("app.5e146caa0a")
+        case .emptyKey: return L10n.t("app.86d07b5fd4")
+        case .invalidAmount: return L10n.t("app.4bf9dc1327")
         case .currencyMismatch(let currencies):
-            return "该账户的余额币种为 \(currencies)，请选择对应币种"
+            return L10n.f("app.324c1f016d", currencies)
         case .duplicateAccount:
-            return "同厂商下已存在同名账户，请使用不同显示名称"
+            return L10n.t("app.b1c29cc952")
         case .storage(let message): return message
         }
     }
@@ -129,8 +129,12 @@ final class AppModel: ObservableObject {
     @Published var providerFormResetToken = UUID()
     @Published var debugDeleteAccountId: String?
     @Published var debugAlertLineAccountId: String?
+    @Published var debugEditAccountId: String?
     @Published var showMessageCenter = false
     @Published var hasUnsavedChanges = false
+    @Published private(set) var selectedLanguageIdentifier = AppLanguage.system.rawValue
+    @Published private(set) var languageOptions: [LocalizedLanguage] = []
+    @Published private(set) var localizationRevision = UUID()
 
     var onStatusChanged: (() -> Void)?
 
@@ -153,6 +157,7 @@ final class AppModel: ObservableObject {
 
     private static let demoFlagKey = "overplay.demoMode"
     private static let demoDisclaimerKey = "overplay.demoDisclaimerAccepted"
+    private static let languageKey = "overplay.language"
 
     init(dataDirectory: URL? = nil, forceDemo: Bool = false) {
         let directory = dataDirectory ?? FileManager.default.homeDirectoryForCurrentUser
@@ -174,7 +179,7 @@ final class AppModel: ObservableObject {
                 demoStore = demo
                 isDemo = true
             } else {
-                initializationWarning = "演示数据初始化失败"
+                initializationWarning = L10n.t("app.a46f3b95b7")
             }
         }
         if isDemo {
@@ -182,6 +187,7 @@ final class AppModel: ObservableObject {
         } else {
             openRealStoreIfNeeded()
         }
+        loadLanguagePreference()
         reloadFromStore()
         showOnboarding = !isDemo && accounts.isEmpty
         Task { await refreshNotificationStatus() }
@@ -247,9 +253,9 @@ final class AppModel: ObservableObject {
                 let fallback = try OverplayStore.inMemory()
                 realStore = fallback
                 settings = (try? fallback.settings()) ?? AppSettings()
-                initializationWarning = "无法打开本地数据库：\(error.localizedDescription)。当前数据不会持久化。"
+                initializationWarning = L10n.f("app.aed83cf132", L10n.t(error.localizedDescription))
             } catch {
-                initializationWarning = "无法打开本地数据库：\(error.localizedDescription)"
+                initializationWarning = L10n.f("app.e066b3d4ed", L10n.t(error.localizedDescription))
                 return false
             }
         }
@@ -323,13 +329,25 @@ final class AppModel: ObservableObject {
             showOnboarding = !isDemo && loadedAccounts.isEmpty
             now = Date()
         } catch {
-            showBanner("读取本地数据失败：\(error.localizedDescription)", style: .error)
+            showBanner(L10n.f("app.d8129eb99d", L10n.t(error.localizedDescription)), style: .error)
         }
         updateMenuBar()
     }
 
     func refreshNotificationStatus() async {
-        notificationStatus = await notifications.authorizationStatus()
+        var status = await notifications.authorizationStatus()
+        if status == .notDetermined, !isDemo, settings.notificationsEnabled {
+            status = await notifications.requestAuthorizationIfNeeded()
+        }
+        notificationStatus = status
+        guard status == .denied, settings.notificationsEnabled else { return }
+        var updated = settings
+        updated.notificationsEnabled = false
+        if let store = activeStore {
+            try? store.saveSettings(updated)
+        }
+        settings = updated
+        showBanner(L10n.t("app.notificationDeniedSetting"), style: .warning)
     }
 
     // MARK: - Engine events
@@ -351,7 +369,7 @@ final class AppModel: ObservableObject {
             syncingAccountIds.remove(accountId)
             lastRefreshAllAt = Date()
             if outcome.status == .invalidCredential {
-                showBanner("\(outcome.error ?? "凭据失效")", style: .warning)
+                showBanner("\(outcome.error ?? L10n.t("alert.credentialInvalid.title"))", style: .warning)
             }
             reloadFromStore()
         case .cancelled(let accountId):
@@ -391,11 +409,11 @@ final class AppModel: ObservableObject {
     func refresh(account: Account) {
         refreshInvocationCount += 1
         guard !isDemo else {
-            showBanner("演示模式使用固定演示数据，不发起网络请求", style: .info)
+            showBanner(L10n.t("app.d92930761a"), style: .info)
             return
         }
         guard account.enabled else {
-            showBanner("该账户已禁用，请先启用", style: .info)
+            showBanner(L10n.t("app.a0611669ad"), style: .info)
             return
         }
         if let reason = refreshBlockedReason(for: account) {
@@ -404,28 +422,28 @@ final class AppModel: ObservableObject {
         }
         guard let syncEngine else { return }
         if !syncEngine.startManualRefresh(account: account) {
-            showBanner("该账户正在同步中，请等待当前请求结束", style: .info)
+            showBanner(L10n.t("app.e4336a9db8"), style: .info)
         }
     }
 
     func refreshAll() {
         refreshInvocationCount += 1
         guard !isDemo else {
-            showBanner("演示模式使用固定演示数据，不发起网络请求", style: .info)
+            showBanner(L10n.t("app.d92930761a"), style: .info)
             return
         }
         let enabled = accounts.filter(\.enabled)
         guard !enabled.isEmpty else {
-            showBanner("没有可刷新的账户", style: .info)
+            showBanner(L10n.t("app.b6a3693bf9"), style: .info)
             return
         }
         guard let syncEngine else { return }
         lastRefreshAllAt = Date()
         let started = enabled.filter { syncEngine.startManualRefresh(account: $0) }.count
         if started == 0 {
-            showBanner("所有账户都在同步中，请等待当前请求结束", style: .info)
+            showBanner(L10n.t("app.a3365bf87d"), style: .info)
         } else {
-            showBanner("已开始刷新 \(started) 个账户", style: .info)
+            showBanner(L10n.f("app.a93ac6a57a", started), style: .info)
         }
     }
 
@@ -445,7 +463,7 @@ final class AppModel: ObservableObject {
     func injectDemoRefreshFailure(accountId: String?) {
         guard isDemo, let accountId,
               let index = accounts.firstIndex(where: { $0.id == accountId }) else { return }
-        accounts[index].lastError = "演示数据：模拟同步失败（仅用于界面验证，不发起请求）"
+        accounts[index].lastError = L10n.t("app.3be09f2023")
         accounts[index].consecutiveFailures = 1
     }
 
@@ -461,7 +479,7 @@ final class AppModel: ObservableObject {
         alertConfig: AccountAlertConfig? = nil
     ) throws -> Account {
         guard !isDemo else { throw AppActionError.demoReadOnly }
-        guard let realStore else { throw AppActionError.storage("本地数据库不可用") }
+        guard let realStore else { throw AppActionError.storage(L10n.t("app.90d3af5ba0")) }
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = try AccountInputValidator.validateNewAccount(
             provider: provider,
@@ -484,14 +502,14 @@ final class AppModel: ObservableObject {
             try realStore.insertAccount(account)
         } catch {
             try? credentials.deleteCredential(accountId: account.id)
-            throw AppActionError.storage("保存账户失败：\(error.localizedDescription)")
+            throw AppActionError.storage(L10n.f("app.bef66819c9", L10n.t(error.localizedDescription)))
         }
         reloadFromStore()
         syncEngine?.resetSchedule(accountId: account.id)
         if let refreshed = accounts.first(where: { $0.id == account.id }) {
             refresh(account: refreshed)
         }
-        showBanner("已添加 \(account.displayName)，开始监控", style: .success)
+        showBanner(L10n.f("app.14ccf36645", account.displayName), style: .success)
         return account
     }
 
@@ -505,7 +523,7 @@ final class AppModel: ObservableObject {
         alertConfig: AccountAlertConfig? = nil
     ) throws {
         guard !isDemo else { throw AppActionError.demoReadOnly }
-        guard let realStore else { throw AppActionError.storage("本地数据库不可用") }
+        guard let realStore else { throw AppActionError.storage(L10n.t("app.90d3af5ba0")) }
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = trimmedName.isEmpty ? account.provider.displayName : trimmedName
         if accounts.contains(where: {
@@ -537,7 +555,7 @@ final class AppModel: ObservableObject {
                 refresh(account: refreshed)
             }
         }
-        showBanner("账户信息已更新", style: .success)
+        showBanner(L10n.t("app.f407e6d344"), style: .success)
     }
 
     func savePublicAlertConfig(_ config: PublicAlertConfig) {
@@ -559,15 +577,15 @@ final class AppModel: ObservableObject {
                 }
             }
             evaluateAndReloadAlerts()
-            showBanner("公共告知 / 警戒线已保存", style: .success)
+            showBanner(L10n.t("app.49f7ea146e"), style: .success)
         } catch {
-            showBanner("保存公共告警线失败：\(error.localizedDescription)", style: .error)
+            showBanner(L10n.f("app.7d24b91ec0", L10n.t(error.localizedDescription)), style: .error)
         }
     }
 
     func saveAccountAlertConfig(_ account: Account, config: AccountAlertConfig) {
         guard !isDemo else {
-            showBanner("演示模式不可修改告警线", style: .info)
+            showBanner(L10n.t("app.25085a984a"), style: .info)
             return
         }
         guard let store = activeStore else { return }
@@ -579,15 +597,15 @@ final class AppModel: ObservableObject {
             try? store.deleteAlertStates(like: "line:\(account.id):%")
             reloadFromStore()
             evaluateAndReloadAlerts()
-            showBanner("告警线配置已保存", style: .success)
+            showBanner(L10n.t("app.c7f21a9e7b"), style: .success)
         } catch {
-            showBanner("保存告警线失败：\(error.localizedDescription)", style: .error)
+            showBanner(L10n.f("app.b744c0cb74", L10n.t(error.localizedDescription)), style: .error)
         }
     }
 
     func setAccountEnabled(_ account: Account, enabled: Bool) {
         guard !isDemo else {
-            showBanner("演示模式下账户不可禁用", style: .info)
+            showBanner(L10n.t("app.e7e2cc04f7"), style: .info)
             return
         }
         guard let realStore else { return }
@@ -603,13 +621,13 @@ final class AppModel: ObservableObject {
                 refresh(account: refreshed)
             }
         } catch {
-            showBanner("更新账户状态失败：\(error.localizedDescription)", style: .error)
+            showBanner(L10n.f("app.8900ae3902", L10n.t(error.localizedDescription)), style: .error)
         }
     }
 
     func deleteAccount(_ account: Account, removeHistory: Bool) {
         guard !isDemo else {
-            showBanner("演示模式下账户为固定演示数据", style: .info)
+            showBanner(L10n.t("app.7706a15cb9"), style: .info)
             return
         }
         guard let realStore else { return }
@@ -621,11 +639,11 @@ final class AppModel: ObservableObject {
             try realStore.deleteAccount(id: account.id, removeHistory: removeHistory)
             reloadFromStore()
             showBanner(
-                removeHistory ? "已删除账户与历史数据" : "已删除账户；历史数据已保留但不参与统计",
+                removeHistory ? L10n.t("app.a244cfb7c3") : L10n.t("app.87c6a95777"),
                 style: .success
             )
         } catch {
-            showBanner("删除账户失败：\(error.localizedDescription)", style: .error)
+            showBanner(L10n.f("app.461fd2bb32", L10n.t(error.localizedDescription)), style: .error)
         }
     }
 
@@ -667,7 +685,7 @@ final class AppModel: ObservableObject {
 
     func saveBudget(account: Account, amountText: String, currency: String) throws {
         guard !isDemo else { throw AppActionError.demoReadOnly }
-        guard let realStore else { throw AppActionError.storage("本地数据库不可用") }
+        guard let realStore else { throw AppActionError.storage(L10n.t("app.90d3af5ba0")) }
         guard let amount = Money.parse(amountText), amount > 0 else {
             throw AppActionError.invalidAmount
         }
@@ -677,20 +695,20 @@ final class AppModel: ObservableObject {
         )
         reloadFromStore()
         evaluateAndReloadAlerts()
-        showBanner("已保存本地月度预算", style: .success)
+        showBanner(L10n.t("app.cec864b86a"), style: .success)
     }
 
     func clearBudget(account: Account) throws {
         guard !isDemo else { throw AppActionError.demoReadOnly }
-        guard let realStore else { throw AppActionError.storage("本地数据库不可用") }
+        guard let realStore else { throw AppActionError.storage(L10n.t("app.90d3af5ba0")) }
         try realStore.setBudget(accountId: account.id, budget: nil)
         reloadFromStore()
-        showBanner("已移除本地预算", style: .success)
+        showBanner(L10n.t("app.603b334e22"), style: .success)
     }
 
     func saveThreshold(account: Account, amountText: String, currency: String) throws {
         guard !isDemo else { throw AppActionError.demoReadOnly }
-        guard let realStore else { throw AppActionError.storage("本地数据库不可用") }
+        guard let realStore else { throw AppActionError.storage(L10n.t("app.90d3af5ba0")) }
         guard let amount = Money.parse(amountText), amount > 0 else {
             throw AppActionError.invalidAmount
         }
@@ -704,15 +722,15 @@ final class AppModel: ObservableObject {
         )
         reloadFromStore()
         evaluateAndReloadAlerts()
-        showBanner("已保存余额低水位阈值", style: .success)
+        showBanner(L10n.t("app.8480c2ad39"), style: .success)
     }
 
     func clearThreshold(account: Account) throws {
         guard !isDemo else { throw AppActionError.demoReadOnly }
-        guard let realStore else { throw AppActionError.storage("本地数据库不可用") }
+        guard let realStore else { throw AppActionError.storage(L10n.t("app.90d3af5ba0")) }
         try realStore.setBalanceThreshold(accountId: account.id, threshold: nil)
         reloadFromStore()
-        showBanner("已移除余额阈值", style: .success)
+        showBanner(L10n.t("app.df1bb175e4"), style: .success)
     }
 
     private func evaluateAndReloadAlerts() {
@@ -1009,7 +1027,7 @@ final class AppModel: ObservableObject {
         if account.capabilities.balance {
             let currencies = balanceCurrencies(for: account)
             if currencies.isEmpty {
-                return account.lastSuccessAt == nil ? "币种待同步" : "币种未知"
+                return account.lastSuccessAt == nil ? L10n.t("app.e20ea04d1a") : L10n.t("app.4fb783cbf3")
             }
             return currencies.joined(separator: " / ")
         }
@@ -1033,21 +1051,21 @@ final class AppModel: ObservableObject {
         let unavailable = latestBalances(for: account).filter { $0.isAvailable == false }
         guard !unavailable.isEmpty else { return nil }
         let codes = unavailable.map(\.currency).sorted().joined(separator: " / ")
-        return "DeepSeek 官方标记 \(codes) 余额不可用；请检查账户状态（欠费、风控或权限）"
+        return L10n.f("app.95d17bb9b5", codes)
     }
 
     func dataIssue(for account: Account) -> String? {
         var reasons: [String] = []
         if account.credentialInvalid {
-            reasons.append("凭据失效：\(account.lastError ?? "需要重新输入 API Key / Management Key")")
+            reasons.append(L10n.f("app.29dd8b4768", L10n.t(account.lastError ?? L10n.t("credential.fallback.managementKey"))))
         } else if let error = account.lastError?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !error.isEmpty {
-            reasons.append("同步失败：\(error)")
+            reasons.append(L10n.f("app.b3c04fc986", L10n.t(error)))
         }
         if let abnormal = accountAbnormalReason(for: account) {
-            reasons.append("账户异常：\(abnormal)")
+            reasons.append(L10n.f("app.50cb69aa73", abnormal))
         }
-        return reasons.isEmpty ? nil : reasons.joined(separator: "；")
+        return reasons.isEmpty ? nil : reasons.joined(separator: L10n.t("common.listSeparator"))
     }
 
     private func usageRecordsStatus(for accounts: [Account], emptyReason: String) -> DataStatus {
@@ -1061,7 +1079,7 @@ final class AppModel: ObservableObject {
     private func allUsageDataStatus() -> DataStatus {
         usageRecordsStatus(
             for: usageAccounts,
-            emptyReason: "暂无可统计用量 / 费用的账户；DeepSeek 官方不提供历史费用 / 用量接口"
+            emptyReason: L10n.t("app.5232d4224a")
         )
     }
 
@@ -1071,14 +1089,14 @@ final class AppModel: ObservableObject {
 
     private func overviewUsageDataStatus() -> DataStatus {
         if let selectedOverviewAccount, !selectedOverviewAccount.capabilities.usage {
-            return .unavailable("所选账户为 \(selectedOverviewAccount.provider.displayName)，不提供历史费用 / 用量")
+            return .unavailable(L10n.f("app.4a457dd1a3", selectedOverviewAccount.provider.displayName))
         }
         if let platform = overviewPlatformFilter, platform != .genericHTTP, !platform.capabilities.usage {
-            return .unavailable("\(platform.displayName) 平台不提供历史费用 / 用量")
+            return .unavailable(L10n.f("app.6ce20d545d", platform.displayName))
         }
         return usageRecordsStatus(
             for: scopedUsageAccounts,
-            emptyReason: "所选范围暂无可统计用量 / 费用的账户"
+            emptyReason: L10n.t("app.c1e0045f5d")
         )
     }
 
@@ -1088,16 +1106,16 @@ final class AppModel: ObservableObject {
         let values = forToday ? todayCosts : monthCosts
         guard values.isEmpty else { return .actual }
         if forToday {
-            return .missing("厂商活动窗口通常仅覆盖完整 UTC 日，今日数据将在下一 UTC 日回填")
+            return .missing(L10n.t("app.1af3d1c790"))
         }
-        return .missing("本机自然月内暂无费用记录，可能不含今天或超出约 30 天窗口")
+        return .missing(L10n.t("app.9e33a4d6ea"))
     }
 
     func tokenDataStatus() -> DataStatus {
         let base = overviewUsageDataStatus()
         guard base.isActual else { return base }
         if tokenSummary.providersWithTokens == 0 {
-            return .missing("所选范围没有可用的 token 数据；部分厂商不提供历史 token，活动窗口约 30 个 UTC 日")
+            return .missing(L10n.t("app.6b70c00827"))
         }
         return .actual
     }
@@ -1105,21 +1123,21 @@ final class AppModel: ObservableObject {
     func creditDataStatus() -> DataStatus {
         if let selectedOverviewAccount {
             guard selectedOverviewAccount.capabilities.credits else {
-                return .unavailable("所选账户为 \(selectedOverviewAccount.provider.displayName)，不提供官方额度")
+                return .unavailable(L10n.f("app.cbe588fbcb", selectedOverviewAccount.provider.displayName))
             }
             return creditDataStatus(for: selectedOverviewAccount)
         }
         if let platform = overviewPlatformFilter, platform != .genericHTTP, !platform.capabilities.credits {
-            return .unavailable("\(platform.displayName) 平台不提供官方额度")
+            return .unavailable(L10n.f("app.c75c91a987", platform.displayName))
         }
         let scoped = overviewAccountsToShow.filter { $0.capabilities.credits }
         guard !scoped.isEmpty else {
-            return .missing("所选范围没有提供官方额度的账户")
+            return .missing(L10n.t("app.b438c0b2ae"))
         }
         let statuses = scoped.map {
             AccountDataStatus.quota(account: $0, quota: latestQuota(for: $0))
         }
-        return AccountDataStatus.aggregate(statuses, emptyReason: "所选范围没有官方额度数据")
+        return AccountDataStatus.aggregate(statuses, emptyReason: L10n.t("app.2535677dec"))
     }
 
     func creditDataStatus(for account: Account) -> DataStatus {
@@ -1134,16 +1152,16 @@ final class AppModel: ObservableObject {
             )
         }
         if let platform = overviewPlatformFilter, platform != .genericHTTP, !platform.capabilities.balance {
-            return .unavailable("\(platform.displayName) 平台不提供官方余额")
+            return .unavailable(L10n.f("app.c5df6d01ed", platform.displayName))
         }
         let scoped = overviewAccountsToShow.filter { $0.capabilities.balance }
         guard !scoped.isEmpty else {
-            return .missing("所选范围没有提供官方余额的账户")
+            return .missing(L10n.t("app.2333ef4627"))
         }
         let statuses = scoped.map {
             AccountDataStatus.balance(account: $0, balances: latestBalances(for: $0))
         }
-        return AccountDataStatus.aggregate(statuses, emptyReason: "所选范围没有官方余额数据")
+        return AccountDataStatus.aggregate(statuses, emptyReason: L10n.t("app.33200f6386"))
     }
 
     func budgetSpendDataStatus(for account: Account) -> DataStatus {
@@ -1158,19 +1176,19 @@ final class AppModel: ObservableObject {
             budgetAccounts = overviewAccountsToShow.filter { $0.budget != nil }
         }
         guard !budgetAccounts.isEmpty else {
-            return .unavailable("所选范围没有本地预算")
+            return .unavailable(L10n.t("app.942f33f6b8"))
         }
         let statuses = budgetAccounts.map {
             AccountDataStatus.budget(account: $0, spend: budgetSpend(for: $0))
         }
-        return AccountDataStatus.aggregate(statuses, emptyReason: "所选范围没有本地预算")
+        return AccountDataStatus.aggregate(statuses, emptyReason: L10n.t("app.942f33f6b8"))
     }
 
     func usageDataStatus() -> DataStatus {
         let base = allUsageDataStatus()
         guard base.isActual else { return base }
         if unfilteredRecords.isEmpty {
-            return .missing("所选范围没有可统计的用量记录；DeepSeek 官方不提供历史用量")
+            return .missing(L10n.t("app.48749e1eb8"))
         }
         return .actual
     }
@@ -1231,56 +1249,56 @@ final class AppModel: ObservableObject {
     }
 
     func capabilitySummary(for account: Account) -> String {
-        if !account.enabled { return "已禁用" }
+        if !account.enabled { return L10n.t("health.disabled") }
         if account.credentialInvalid {
             return account.provider == .openrouter
-                ? "凭据失效 · 需要 Management Key"
-                : "凭据失效 · 需要重新输入 API Key"
+                ? L10n.t("app.764db3aa2c")
+                : L10n.t("app.3c6fe7e071")
         }
         if accountAbnormalReason(for: account) != nil {
-            return "账户异常 · 官方标记余额不可用"
+            return L10n.t("app.93f4323a20")
         }
         guard account.lastSuccessAt != nil else {
-            if account.lastError != nil { return "能力未验证（同步失败）" }
-            return "等待连接测试"
+            if account.lastError != nil { return L10n.t("app.3a9de991cc") }
+            return L10n.t("app.6f55e284a4")
         }
         let capabilities = account.capabilities
         if account.lastError != nil {
             if capabilities.credits {
                 return latestQuota(for: account) == nil
-                    ? "同步异常 · credits 不可用"
-                    : "credits 可用；用量接口暂时不可用"
+                    ? L10n.t("app.eed9badd64")
+                    : L10n.t("app.ab3f84c0a2")
             }
             if capabilities.balance {
                 return latestBalances(for: account).isEmpty
-                    ? "同步异常 · 余额不可用"
-                    : "部分成功"
+                    ? L10n.t("app.c65cc67930")
+                    : L10n.t("app.2f2b7e05e3")
             }
-            return "部分成功"
+            return L10n.t("app.2f2b7e05e3")
         }
         if capabilities.credits {
             if latestQuota(for: account) == nil {
-                return "厂商未返回 credits"
+                return L10n.t("app.90dfb262ae")
             }
             return account.isDemo
-                ? "演示额度 / 用量 / 费用数据"
-                : "credits / 额度 / 用量 / 费用可用"
+                ? L10n.t("app.329a2b591b")
+                : L10n.t("app.69afcf03fd")
         }
         if capabilities.balance {
             if latestBalances(for: account).isEmpty {
-                return "厂商未返回余额"
+                return L10n.t("app.342072942c")
             }
-            return "余额可用 · 官方无历史用量 / 费用"
+            return L10n.t("app.76c7681fd9")
         }
-        return "已连接"
+        return L10n.t("app.65fe35c45e")
     }
 
     func lastSyncText(for account: Account) -> String {
         if let lastSuccess = account.lastSuccessAt {
             let text = DateFormatters.mediumDateTime.string(from: lastSuccess)
-            return isStale(account) ? "已过期 · 最后成功 \(text)" : "最后成功 \(text)"
+            return isStale(account) ? L10n.f("app.ea6f4c8653", text) : L10n.f("app.27f3a215af", text)
         }
-        return "尚未成功同步"
+        return L10n.t("app.52e38de1f4")
     }
 
     var unacknowledgedAlerts: [AlertEvent] {
@@ -1317,7 +1335,7 @@ final class AppModel: ObservableObject {
             syncVisibleToasts(toastQueue.removeAlert(alertId: alert.id, now: Date()))
             reloadFromStore()
         } catch {
-            showBanner("确认告警失败：\(error.localizedDescription)", style: .error)
+            showBanner(L10n.f("app.3ec8c19e6f", L10n.t(error.localizedDescription)), style: .error)
         }
     }
 
@@ -1379,18 +1397,18 @@ final class AppModel: ObservableObject {
     }
 
     var dataFileDisplayPath: String {
-        if isDemo { return "演示数据（内存命名空间，不读写真实数据库）" }
+        if isDemo { return L10n.t("app.294780b3f2") }
         guard let realStore else { return databaseURL.path }
-        return realStore.isInMemory ? "内存数据库（不可持久化）" : realStore.path
+        return realStore.isInMemory ? L10n.t("app.87dd7c08e3") : realStore.path
     }
 
     var notificationStatusText: String {
         switch notificationStatus {
-        case .authorized, .provisional: return "已授权"
-        case .denied: return "已拒绝"
-        case .notDetermined: return "尚未请求"
-        case .ephemeral: return "临时授权"
-        @unknown default: return "未知"
+        case .authorized, .provisional: return L10n.t("app.284cc0bae1")
+        case .denied: return L10n.t("app.4c7c52c706")
+        case .notDetermined: return L10n.t("app.452e30d1df")
+        case .ephemeral: return L10n.t("app.6645a29821")
+        @unknown default: return L10n.t("app.d9c32a4c3d")
         }
     }
 
@@ -1409,13 +1427,98 @@ final class AppModel: ObservableObject {
             }
             updateMenuBar()
         } catch {
-            showBanner("保存刷新间隔失败：\(error.localizedDescription)", style: .error)
+            showBanner(L10n.f("app.bbdaf20d6a", L10n.t(error.localizedDescription)), style: .error)
         }
+    }
+
+    // MARK: - Language
+
+    var effectiveLocale: Locale { LocalizationStore.shared.currentLocale }
+    var effectiveLocaleIdentifier: String { LocalizationStore.shared.effectiveLocale }
+    var selectedImportedLanguagePack: LocalizedLanguagePack? {
+        LocalizationStore.shared.selectedPack
+    }
+
+    private static var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+    }
+
+    func loadLanguagePreference() {
+        let saved = isDemo ? nil : UserDefaults.standard.string(forKey: Self.languageKey)
+        let store = LocalizationStore.shared
+        if let saved, saved != AppLanguage.system.rawValue {
+            store.select(locale: saved)
+        } else {
+            store.select(locale: nil)
+        }
+        if store.selectedIdentifier != saved, !isDemo {
+            UserDefaults.standard.removeObject(forKey: Self.languageKey)
+        }
+        selectedLanguageIdentifier = store.selectedIdentifier
+        languageOptions = store.availableLanguages
+        localizationRevision = UUID()
+    }
+
+    func setLanguage(identifier: String) {
+        let store = LocalizationStore.shared
+        if identifier == AppLanguage.system.rawValue {
+            store.select(locale: nil)
+        } else {
+            store.select(locale: identifier)
+        }
+        selectedLanguageIdentifier = store.selectedIdentifier
+        languageOptions = store.availableLanguages
+        if !isDemo {
+            if selectedLanguageIdentifier == AppLanguage.system.rawValue {
+                UserDefaults.standard.removeObject(forKey: Self.languageKey)
+            } else {
+                UserDefaults.standard.set(selectedLanguageIdentifier, forKey: Self.languageKey)
+            }
+        }
+        localizationRevision = UUID()
+        refreshLocalizedContent()
+    }
+
+    @discardableResult
+    func importLanguagePack(data: Data, sourceFileName: String?) throws -> LocalizedLanguagePack {
+        guard !isDemo else { throw AppActionError.demoReadOnly }
+        let pack = try LocalizationStore.shared.importPack(
+            data: data,
+            appVersion: Self.appVersion,
+            sourceFileName: sourceFileName
+        )
+        languageOptions = LocalizationStore.shared.availableLanguages
+        setLanguage(identifier: pack.locale)
+        showBanner(L10n.f("app.languagePackImported", pack.displayName), style: .success)
+        return pack
+    }
+
+    func removeLanguagePack(locale: String) throws {
+        guard !isDemo else { throw AppActionError.demoReadOnly }
+        let wasSelected = selectedLanguageIdentifier == locale
+        try LocalizationStore.shared.removePack(locale: locale)
+        languageOptions = LocalizationStore.shared.availableLanguages
+        if wasSelected {
+            setLanguage(identifier: AppLanguage.system.rawValue)
+        } else {
+            localizationRevision = UUID()
+        }
+        showBanner(L10n.t("app.languagePackRemoved"), style: .info)
+    }
+
+    private func refreshLocalizedContent() {
+        updateMenuBar()
+        guard !alerts.isEmpty else { return }
+        for task in toastTasks.values { task.cancel() }
+        toastTasks.removeAll()
+        toastQueue = ToastQueue(maxVisible: 3)
+        shownAlertIds.removeAll()
+        enqueueAlertToasts(alerts.filter { !$0.acknowledged })
     }
 
     func setNotificationsEnabled(_ enabled: Bool) {
         if isDemo {
-            showBanner("演示模式不读取系统通知权限，也不发送通知", style: .info)
+            showBanner(L10n.t("app.9d48fbb9e2"), style: .info)
             return
         }
         Task {
@@ -1423,7 +1526,7 @@ final class AppModel: ObservableObject {
                 let status = await notifications.requestAuthorizationIfNeeded()
                 notificationStatus = status
                 guard status == .authorized || status == .provisional else {
-                    showBanner("通知权限未开启。应用内告警仍可用，可在系统设置中授权通知。", style: .warning)
+                    showBanner(L10n.t("app.67dc5ac899"), style: .warning)
                     return
                 }
             }
@@ -1433,32 +1536,39 @@ final class AppModel: ObservableObject {
             do {
                 try store.saveSettings(updated)
                 settings = updated
+                if !enabled {
+                    notifications.clearDelivered()
+                }
             } catch {
-                showBanner("保存通知设置失败：\(error.localizedDescription)", style: .error)
+                showBanner(L10n.f("app.36652fd1cb", L10n.t(error.localizedDescription)), style: .error)
             }
         }
     }
 
     func sendTestNotification() {
         if isDemo {
-            showBanner("演示模式不发送系统通知；告警仅显示在应用内", style: .info)
+            showBanner(L10n.t("app.c8e02b47fa"), style: .info)
+            return
+        }
+        guard settings.notificationsEnabled else {
+            showBanner(L10n.t("app.notificationsOff"), style: .warning)
             return
         }
         Task {
             let status = await notifications.requestAuthorizationIfNeeded()
             notificationStatus = status
             guard status == .authorized || status == .provisional else {
-                showBanner("通知权限未开启，无法发送测试通知", style: .warning)
+                showBanner(L10n.t("app.a96c46f300"), style: .warning)
                 return
             }
             let sent = await notifications.post(
-                title: "Overplay 测试通知",
-                body: "通知功能正常。告警内容不会包含 API Key。"
+                title: L10n.t("app.4644dc5b14"),
+                body: L10n.t("app.9efc8a8e3f")
             )
             if sent {
-                showBanner("测试通知已发送", style: .success)
+                showBanner(L10n.t("app.2d55ddbd5a"), style: .success)
             } else {
-                showBanner("测试通知发送失败，请检查系统通知设置", style: .error)
+                showBanner(L10n.t("app.6fcc25f83d"), style: .error)
             }
         }
     }
@@ -1470,10 +1580,10 @@ final class AppModel: ObservableObject {
     func requestEnterDemoMode() {
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "进入演示模式"
+        alert.messageText = L10n.t("app.fb7f73f291")
         alert.informativeText = DemoMode.disclaimer
-        alert.addButton(withTitle: "进入演示模式")
-        alert.addButton(withTitle: "取消")
+        alert.addButton(withTitle: L10n.t("app.fb7f73f291"))
+        alert.addButton(withTitle: L10n.t("common.cancel"))
         if alert.runModal() == .alertFirstButtonReturn {
             enterDemoMode()
         }
@@ -1482,9 +1592,9 @@ final class AppModel: ObservableObject {
     func showDemoDisclaimer() {
         let alert = NSAlert()
         alert.alertStyle = .informational
-        alert.messageText = "演示模式说明"
+        alert.messageText = L10n.t("app.d0f838a6b6")
         alert.informativeText = DemoMode.disclaimer
-        alert.addButton(withTitle: "知道了")
+        alert.addButton(withTitle: L10n.t("app.cb63c62e50"))
         alert.runModal()
     }
 
@@ -1515,16 +1625,16 @@ final class AppModel: ObservableObject {
             resetToastState()
             reloadFromStore()
             showOnboarding = false
-            showBanner("已进入演示模式：所有数据均为模拟数据", style: .info)
+            showBanner(L10n.t("app.7e96362ee7"), style: .info)
         } catch {
-            showBanner("演示数据初始化失败：\(error.localizedDescription)", style: .error)
+            showBanner(L10n.f("app.7b6c04f5ba", L10n.t(error.localizedDescription)), style: .error)
         }
     }
 
     func exitDemoMode() {
         guard isDemo else { return }
         guard openRealStoreIfNeeded() else {
-            showBanner("无法打开真实数据库，仍停留在演示模式", style: .error)
+            showBanner(L10n.t("app.fce85267ff"), style: .error)
             return
         }
         isDemo = false
@@ -1537,17 +1647,18 @@ final class AppModel: ObservableObject {
         overviewAccountFilter = nil
         balanceCurrencyFilter = nil
         resetToastState()
+        loadLanguagePreference()
         reloadFromStore()
         syncEngine?.updateSettings(settings)
         syncEngine?.bootstrap(accounts: accounts)
         showOnboarding = accounts.isEmpty
-        showBanner("已退出演示模式", style: .info)
+        showBanner(L10n.t("app.fa39045beb"), style: .info)
     }
 
-    func clearAllData() {
+    func clearAllData(removeLanguagePacks: Bool = false) {
         if isDemo {
             exitDemoMode()
-            showBanner("演示数据已清除", style: .success)
+            showBanner(L10n.t("app.1b8dc501c3"), style: .success)
             return
         }
         guard let realStore else { return }
@@ -1561,19 +1672,32 @@ final class AppModel: ObservableObject {
         transport.shutdown()
         var errors: [String] = []
         do { try credentials.deleteAll() } catch {
-            errors.append("凭证删除失败：\(error.localizedDescription)")
+            errors.append(L10n.f("app.74c945eebf", L10n.t(error.localizedDescription)))
         }
         do { try realStore.clearAllData() } catch {
-            errors.append("数据库清理失败：\(error.localizedDescription)")
+            errors.append(L10n.f("app.3f22758230", L10n.t(error.localizedDescription)))
         }
         notifications.clearDelivered()
         UserDefaults.standard.removeObject(forKey: Self.demoFlagKey)
         UserDefaults.standard.removeObject(forKey: Self.demoDisclaimerKey)
+        UserDefaults.standard.removeObject(forKey: Self.languageKey)
+        FloatingWindowStateStore().clear()
+        if removeLanguagePacks {
+            try? LocalizationStore.shared.clearPacks()
+        }
+        LocalizationStore.shared.setLanguage(.system)
+        selectedLanguageIdentifier = AppLanguage.system.rawValue
+        languageOptions = LocalizationStore.shared.availableLanguages
+        localizationRevision = UUID()
         selectedTab = .overview
         selectedCurrency = nil
+        usageAccountFilter = nil
+        usageModelFilter = nil
         overviewPlatformFilter = nil
         overviewAccountFilter = nil
         balanceCurrencyFilter = nil
+        hasUnsavedChanges = false
+        providerFormResetToken = UUID()
         resetToastState()
         syncingAccountIds.removeAll()
         settings = AppSettings()
@@ -1583,29 +1707,36 @@ final class AppModel: ObservableObject {
         reloadFromStore()
         showOnboarding = true
         if errors.isEmpty {
-            showBanner("已清除账户、凭证、历史用量、告警记录与设置", style: .success)
+            showBanner(L10n.t("app.027cb2a187"), style: .success)
         } else {
-            showBanner(errors.joined(separator: "；"), style: .error)
+            showBanner(errors.joined(separator: L10n.t("common.listSeparator")), style: .error)
         }
     }
 
     func confirmClearAllData() {
         let alert = NSAlert()
         alert.alertStyle = .critical
-        alert.messageText = "清除全部本地数据？"
-        alert.informativeText = "将删除所有账户、Keychain 凭证、历史用量、余额快照、告警记录与设置。此操作不可撤销。"
-        alert.addButton(withTitle: "继续")
-        alert.addButton(withTitle: "取消")
+        alert.messageText = L10n.t("app.c0c098d6ac")
+        alert.informativeText = L10n.t("app.8b14fe5802")
+        alert.addButton(withTitle: L10n.t("app.1fc1afc5c5"))
+        alert.addButton(withTitle: L10n.t("common.cancel"))
         guard alert.runModal() == .alertFirstButtonReturn else { return }
 
         let second = NSAlert()
         second.alertStyle = .critical
-        second.messageText = "再次确认：删除后无法恢复"
-        second.informativeText = "如果只是想重置演示数据，请在演示模式中使用“退出演示模式”。"
-        second.addButton(withTitle: "清除全部数据")
-        second.addButton(withTitle: "取消")
+        second.messageText = L10n.t("app.1ec2117faf")
+        second.informativeText = L10n.t("app.64746971b6")
+        second.addButton(withTitle: L10n.t("app.04c3cd821d"))
+        second.addButton(withTitle: L10n.t("common.cancel"))
+        let removePacks = NSButton(
+            checkboxWithTitle: L10n.t("app.clearLanguagePacks"),
+            target: nil,
+            action: nil
+        )
+        removePacks.state = .off
+        second.accessoryView = removePacks
         if second.runModal() == .alertFirstButtonReturn {
-            clearAllData()
+            clearAllData(removeLanguagePacks: removePacks.state == .on)
         }
     }
 
@@ -1639,7 +1770,7 @@ final class AppModel: ObservableObject {
             let status = await notifications.requestAuthorizationIfNeeded()
             notificationStatus = status
             guard status == .authorized || status == .provisional else {
-                showBanner("通知权限未开启，告警已记录在应用内告警中心", style: .warning)
+                showBanner(L10n.t("app.ca9251b558"), style: .warning)
                 return
             }
             await notifications.post(events: relevant)
@@ -1680,10 +1811,10 @@ final class AppModel: ObservableObject {
 
     private func bannerTitle(for style: BannerStyle) -> String {
         switch style {
-        case .info: return "提示"
-        case .success: return "成功"
-        case .warning: return "提示"
-        case .error: return "错误"
+        case .info: return L10n.t("common.info")
+        case .success: return L10n.t("common.success")
+        case .warning: return L10n.t("common.info")
+        case .error: return L10n.t("common.error")
         }
     }
 
@@ -1755,13 +1886,13 @@ final class AppModel: ObservableObject {
     }
 
     var statusBarTooltip: String {
-        var parts: [String] = [isDemo ? "Overplay · 演示数据" : "Overplay"]
+        var parts: [String] = [isDemo ? L10n.t("app.2b6bb70c85") : "Overplay"]
         if unacknowledgedAlertCount > 0 {
-            parts.append(hasCriticalAlert ? "有未确认警戒/失败 \(unacknowledgedAlertCount) 条" : "有未确认告警 \(unacknowledgedAlertCount) 条")
+            parts.append(hasCriticalAlert ? L10n.f("app.146e97f7da", unacknowledgedAlertCount) : L10n.f("app.4c3b9d5adf", unacknowledgedAlertCount))
         } else if hasWarningAlert {
-            parts.append("有未确认告知")
+            parts.append(L10n.t("app.df356025b3"))
         } else if !accounts.isEmpty {
-            parts.append("\(accounts.count) 个账户")
+            parts.append(L10n.f("app.e8b079e0f6", accounts.count))
         }
         return parts.joined(separator: " · ")
     }

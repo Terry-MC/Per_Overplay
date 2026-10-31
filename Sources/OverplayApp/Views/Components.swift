@@ -4,21 +4,25 @@ import UniformTypeIdentifiers
 import OverplayCore
 
 struct DemoTag: View {
+    @Environment(\.locale) private var locale
+
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: "flask.fill")
-            Text("演示数据")
+            Text(L10n.t("component.1e5e74525b"))
         }
         .font(.caption2.weight(.semibold))
         .foregroundStyle(.orange)
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
         .background(Capsule().fill(Color.orange.opacity(0.14)))
-        .accessibilityLabel("演示数据，仅用于功能展示，不代表真实账单")
+        .accessibilityLabel(L10n.t("component.927484dbe6"))
     }
 }
 
 struct DemoBanner: View {
+    @Environment(\.locale) private var locale
+
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "flask.fill")
@@ -89,7 +93,7 @@ struct MetricCard: View {
     var footnote: String?
     var symbol: String
     var isDemo: Bool
-    var emptyText: String = "无数据"
+    var emptyText: String = L10n.t("dataStatus.6ffa7e6d35")
     var status: DataStatus = .actual
     var accessory: AnyView?
 
@@ -322,6 +326,7 @@ struct FlowLayout: Layout {
 }
 
 struct HealthBadge: View {
+    @Environment(\.locale) private var locale
     var health: AccountHealth
 
     private var color: Color {
@@ -360,7 +365,7 @@ struct HealthBadge: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
         .background(Capsule().fill(color.opacity(0.12)))
-        .accessibilityLabel("状态：\(health.label)")
+        .accessibilityLabel(L10n.f("component.9b4e99d7ac", health.label))
     }
 }
 
@@ -444,7 +449,7 @@ struct ToastCardView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Image(systemName: icon)
                         .foregroundStyle(color)
-                    Text(toast.title)
+                    Text(L10n.t(toast.title))
                         .font(.subheadline.weight(.semibold))
                     if toast.isDemo { DemoTag() }
                     Spacer()
@@ -460,16 +465,16 @@ struct ToastCardView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                    .help(toast.isAlert ? "关闭提示；消息仍保留在消息中心" : "关闭提示")
+                    .help(toast.isAlert ? L10n.t("component.23cf98c788") : L10n.t("component.c620893e29"))
                 }
-                Text(toast.message)
+                Text(L10n.t(toast.message))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
                     if toast.isAlert {
-                        Button("查看消息") {
+                        Button(L10n.t("component.8774d48dc1")) {
                             model.dismissToast(toast.id)
                             model.showMessageCenter = true
                         }
@@ -478,11 +483,11 @@ struct ToastCardView: View {
                     }
                     Spacer()
                     if toast.autoDismiss {
-                        Text(toast.isAlert ? "\(remaining)s 后归档到消息" : "\(remaining)s 后关闭")
+                        Text(toast.isAlert ? L10n.f("component.859b0f08aa", remaining) : L10n.f("component.aeca3d65dc", remaining))
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     } else {
-                        Text(toast.isAlert ? "需手动关闭；消息仍保留在消息中心" : "需手动关闭")
+                        Text(toast.isAlert ? L10n.t("component.d86f575901") : L10n.t("component.981e2f1ede"))
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
@@ -510,6 +515,7 @@ struct ToastCardView: View {
 }
 
 struct AnomalyNotice: View {
+    @Environment(\.locale) private var locale
     var message: String
 
     var body: some View {
@@ -517,10 +523,10 @@ struct AnomalyNotice: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
             VStack(alignment: .leading, spacing: 2) {
-                Text("数据异常")
+                Text(L10n.t("dataStatus.ff09dc6102"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.orange)
-                Text(message)
+                Text(L10n.t(message))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
@@ -535,13 +541,14 @@ struct AnomalyNotice: View {
 }
 
 struct InlineErrorView: View {
+    @Environment(\.locale) private var locale
     var message: String
 
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
-            Text(message)
+            Text(L10n.t(message))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
@@ -554,7 +561,7 @@ struct InlineErrorView: View {
 }
 
 enum UIFormat {
-    static func costLines(_ costs: [String: Decimal], emptyText: String = "厂商未提供") -> [(String, String?)] {
+    static func costLines(_ costs: [String: Decimal], emptyText: String = L10n.t("providerDetail.567cdafa2a")) -> [(String, String?)] {
         if costs.isEmpty { return [(emptyText, nil)] }
         return costs.keys.sorted().map { currency in
             (Money.formatCost(costs[currency] ?? 0, currency: currency), nil)
@@ -578,7 +585,7 @@ enum AppPanels {
         panel.nameFieldStringValue = filename
         panel.allowedContentTypes = [.commaSeparatedText]
         panel.canCreateDirectories = true
-        panel.title = isDemo ? "导出用量 CSV · 演示数据" : "导出用量 CSV"
+        panel.title = isDemo ? L10n.t("component.404d799301") : L10n.t("component.4d045824c0")
         if isDemo {
             panel.message = DemoMode.shortBadge
         }
@@ -602,10 +609,10 @@ enum AppPanels {
         guard model.hasUnsavedChanges else { return true }
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "有未保存的新增厂商表单，仍要\(action)？"
-        alert.informativeText = "继续将丢弃表单内容；已保存的账户和设置不会受影响。"
-        alert.addButton(withTitle: "放弃修改")
-        alert.addButton(withTitle: "返回")
+        alert.messageText = L10n.f("component.1b4f849b89", action)
+        alert.informativeText = L10n.t("component.b10c2b2f24")
+        alert.addButton(withTitle: L10n.t("component.1cead06d6b"))
+        alert.addButton(withTitle: L10n.t("component.11d0241540"))
         if alert.runModal() == .alertFirstButtonReturn {
             model.hasUnsavedChanges = false
             model.providerFormResetToken = UUID()
@@ -619,7 +626,7 @@ enum AppPanels {
         alert.alertStyle = .warning
         alert.messageText = title
         alert.informativeText = message
-        alert.addButton(withTitle: "好")
+        alert.addButton(withTitle: L10n.t("component.27e4fe4c3f"))
         alert.runModal()
     }
 }
@@ -629,10 +636,10 @@ struct MessageCenterEntryCard: View {
 
     var body: some View {
         SectionCard(
-            title: "消息中心",
+            title: L10n.t("messages.6ef1e2d287"),
             subtitle: model.unacknowledgedAlertCount > 0
-                ? "\(model.unacknowledgedAlertCount) 条未确认"
-                : "无未确认消息",
+                ? L10n.f("menuBar.dd296b0bc0", model.unacknowledgedAlertCount)
+                : L10n.t("component.1f1833e81c"),
             isDemo: model.isDemo
         ) {
             HStack(spacing: 10) {
@@ -642,11 +649,11 @@ struct MessageCenterEntryCard: View {
                         : "bell"
                 )
                 .foregroundStyle(model.unacknowledgedAlertCount > 0 ? Color.orange : Color.secondary)
-                Text("顶部提示倒计时结束后归档到消息中心；关闭提示不会删除消息。")
+                Text(L10n.t("component.d3a317766b"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("打开消息中心") {
+                Button(L10n.t("dashboard.4d7ebd8d8f")) {
                     model.showMessageCenter = true
                 }
             }
@@ -655,6 +662,7 @@ struct MessageCenterEntryCard: View {
 }
 
 struct AlertRowView: View {
+    @Environment(\.locale) private var locale
     var alert: AlertEvent
     var isDemo: Bool
     var onAcknowledge: () -> Void
@@ -688,16 +696,16 @@ struct AlertRowView: View {
                 .frame(width: 20)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(alert.kind.title).font(.subheadline.weight(.semibold))
+                    Text(alert.renderedTitle).font(.subheadline.weight(.semibold))
                     if isDemo || alert.isDemo { DemoTag() }
                     if alert.acknowledged {
-                        Text("已确认").font(.caption2).foregroundStyle(.secondary)
+                        Text(L10n.t("core.messages.d9fea67ad2")).font(.caption2).foregroundStyle(.secondary)
                     }
                 }
                 Text(alert.accountName)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("当前 \(alert.value) · 阈值 \(alert.threshold) · \(alert.metric)")
+                Text(L10n.f("component.2e2635addf", alert.renderedValue, alert.renderedThreshold, AlertMetricText.localized(alert.metric)))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -707,7 +715,7 @@ struct AlertRowView: View {
             }
             Spacer()
             if !alert.acknowledged {
-                Button("确认", action: onAcknowledge)
+                Button(L10n.t("component.b56d9ac6c5"), action: onAcknowledge)
                     .buttonStyle(.bordered)
                     .controlSize(.small)
             }
@@ -717,6 +725,7 @@ struct AlertRowView: View {
 }
 
 struct BudgetProgressBar: View {
+    @Environment(\.locale) private var locale
     var ratio: Decimal?
     var isDemo: Bool
 
@@ -749,7 +758,7 @@ struct BudgetProgressBar: View {
         }
         .frame(height: 10)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("使用率")
-        .accessibilityValue(ratio.map { Money.percent($0) } ?? "不可用")
+        .accessibilityLabel(L10n.t("quota.8ca02f90d1"))
+        .accessibilityValue(ratio.map { Money.percent($0) } ?? L10n.t("dataStatus.beff4a1cd1"))
     }
 }

@@ -26,13 +26,13 @@ struct MenuBarPanelView: View {
                         Image(systemName: "plus.circle")
                             .font(.title2)
                             .foregroundStyle(.secondary)
-                        Text("尚未添加账户")
+                        Text(L10n.t("menuBar.1f78ac5a72"))
                             .font(.headline)
-                        Text("添加 DeepSeek 或 OpenRouter 账户，或使用演示模式体验。")
+                        Text(L10n.t("menuBar.0036c5c9d5"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
-                        Button("打开主界面") { openMain(.overview) }
+                        Button(L10n.t("menuBar.1519cc3e90")) { openMain(.overview) }
                             .buttonStyle(.borderedProminent)
                             .controlSize(.small)
                     }
@@ -52,10 +52,10 @@ struct MenuBarPanelView: View {
                     Divider()
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
-                            Text("告警").font(.caption.weight(.semibold))
+                            Text(L10n.t("menuBar.5078424f7e")).font(.caption.weight(.semibold))
                             if model.isDemo { DemoTag() }
                             Spacer()
-                            Text("\(model.unacknowledgedAlerts.count) 条未确认")
+                            Text(L10n.f("menuBar.dd296b0bc0", model.unacknowledgedAlerts.count))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -63,7 +63,7 @@ struct MenuBarPanelView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .foregroundStyle(.orange)
-                                Text("\(alert.accountName)：\(alert.kind.title)")
+                                Text(L10n.f("common.accountAlertLabel", alert.accountName, alert.renderedTitle))
                                     .font(.caption)
                                     .lineLimit(1)
                             }
@@ -80,12 +80,12 @@ struct MenuBarPanelView: View {
                 Button {
                     openMain(.overview)
                 } label: {
-                    Label("主界面", systemImage: "macwindow")
+                    Label(L10n.t("menuBar.eb943fa97b"), systemImage: "macwindow")
                 }
                 Button {
                     model.refreshAll()
                 } label: {
-                    Label("刷新", systemImage: "arrow.clockwise")
+                    Label(L10n.t("providerDetail.38108eaa1d"), systemImage: "arrow.clockwise")
                 }
                 .disabled(model.isDemo || model.accounts.isEmpty)
                 Button {
@@ -99,7 +99,7 @@ struct MenuBarPanelView: View {
                 } label: {
                     Image(systemName: "power")
                 }
-                .help("退出 Overplay")
+                .help(L10n.t("statusBar.d94cefe4dc"))
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -107,6 +107,7 @@ struct MenuBarPanelView: View {
         }
         .frame(width: 366)
         .background(Color(nsColor: .windowBackgroundColor))
+        .environment(\.locale, model.effectiveLocale)
     }
 
     private var header: some View {
@@ -119,7 +120,7 @@ struct MenuBarPanelView: View {
                     Text("Overplay").font(.headline)
                     if model.isDemo { DemoTag() }
                 }
-                Text(model.isDemo ? "演示模式" : "\(model.accounts.count) 个账户 · \(model.settings.refreshIntervalMinutes) 分钟刷新")
+                Text(model.isDemo ? L10n.t("settings.fbd46976e0") : L10n.f("menuBar.94d9bdb6d9", model.accounts.count, model.settings.refreshIntervalMinutes))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -127,7 +128,7 @@ struct MenuBarPanelView: View {
             if model.hasCriticalAlert {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red)
-                    .help("存在未确认告警")
+                    .help(L10n.t("menuBar.a03082271f"))
             }
         }
         .padding(.horizontal, 16)
@@ -158,9 +159,9 @@ struct MenuBarPanelView: View {
 
     private func primaryMetric(_ account: Account) -> String {
         if account.capabilities.credits {
-            guard let quota = model.latestQuota(for: account) else { return "尚未同步" }
-            let label = account.provider == .openrouter ? "credits" : "额度"
-            return "\(label) \(Money.formatBalance(quota.remaining, currency: quota.currency)) · 已用 \(Money.formatBalance(quota.totalUsage, currency: quota.currency))"
+            guard let quota = model.latestQuota(for: account) else { return L10n.t("health.neverSynced") }
+            let label = account.provider == .openrouter ? "credits" : L10n.t("menuBar.3fa9a9d38e")
+            return L10n.f("menuBar.d7981395e7", label, Money.formatBalance(quota.remaining, currency: quota.currency), Money.formatBalance(quota.totalUsage, currency: quota.currency))
         }
         let balances = model.latestBalances(for: account)
         if !balances.isEmpty {
@@ -169,8 +170,8 @@ struct MenuBarPanelView: View {
             }.joined(separator: " · ")
         }
         if account.capabilities.usage {
-            return "已连接 · 用量可用"
+            return L10n.t("menuBar.2e969b0a68")
         }
-        return "尚未同步"
+        return L10n.t("health.neverSynced")
     }
 }
