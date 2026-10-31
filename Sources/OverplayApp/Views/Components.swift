@@ -688,7 +688,7 @@ struct AlertRowView: View {
                 .frame(width: 20)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(alert.kind.title).font(.subheadline.weight(.semibold))
+                    Text(alert.renderedTitle).font(.subheadline.weight(.semibold))
                     if isDemo || alert.isDemo { DemoTag() }
                     if alert.acknowledged {
                         Text(L10n.t("core.messages.d9fea67ad2")).font(.caption2).foregroundStyle(.secondary)
@@ -697,7 +697,7 @@ struct AlertRowView: View {
                 Text(alert.accountName)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text(L10n.f("component.2e2635addf", alert.value, alert.threshold, AlertMetricText.localized(alert.metric)))
+                Text(L10n.f("component.2e2635addf", alert.renderedValue, alert.renderedThreshold, AlertMetricText.localized(alert.metric)))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

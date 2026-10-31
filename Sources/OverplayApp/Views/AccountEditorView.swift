@@ -242,7 +242,7 @@ struct AccountEditorView: View {
         return HStack(alignment: .top, spacing: 8) {
             Image(systemName: symbol).foregroundStyle(color)
             VStack(alignment: .leading, spacing: 4) {
-                Text(result.message)
+                Text(L10n.t(result.message))
                     .font(.callout)
                     .textSelection(.enabled)
                 if let capabilities = result.capabilities {

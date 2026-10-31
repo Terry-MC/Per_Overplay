@@ -202,6 +202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ("remove-status-item", { [weak self] in self?.statusBarController.removeStatusItem() })
         ])
         model.start()
+        configureMainMenu()
         model.$localizationRevision
             .dropFirst()
             .receive(on: RunLoop.main)
@@ -390,7 +391,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(withTitle: L10n.t("appDelegate.3e44b2a933"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editItem.submenu = editMenu
 
+        if let model {
+            let languageItem = NSMenuItem()
+            mainMenu.addItem(languageItem)
+            let languageMenu = NSMenu(title: L10n.t("settings.language.title"))
+            for language in model.languageOptions {
+                let item = NSMenuItem(
+                    title: language.displayName,
+                    action: #selector(changeLanguageFromMenu(_:)),
+                    keyEquivalent: ""
+                )
+                item.target = self
+                item.representedObject = language.id
+                item.state = language.id == model.selectedLanguageIdentifier ? .on : .off
+                languageMenu.addItem(item)
+            }
+            languageItem.submenu = languageMenu
+        }
+
         NSApp.mainMenu = mainMenu
+    }
+
+    @objc private func changeLanguageFromMenu(_ sender: NSMenuItem) {
+        guard let identifier = sender.representedObject as? String else { return }
+        model.setLanguage(identifier: identifier)
     }
 
     @objc private func quitFromMenu() {

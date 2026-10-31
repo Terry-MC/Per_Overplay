@@ -101,6 +101,10 @@ struct SettingsView: View {
                 let accessing = url.startAccessingSecurityScopedResource()
                 defer { if accessing { url.stopAccessingSecurityScopedResource() } }
                 do {
+                    let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                    guard size <= LocalizedLanguagePack.maxFileSize else {
+                        throw LanguagePackError.fileTooLarge
+                    }
                     let data = try Data(contentsOf: url)
                     _ = try model.importLanguagePack(
                         data: data,
@@ -184,7 +188,7 @@ struct SettingsView: View {
                     Button(L10n.t("settings.76ef862577")) {
                         model.sendTestNotification()
                     }
-                    .disabled(model.isDemo)
+                    .disabled(model.isDemo || !model.settings.notificationsEnabled)
                 }
             }
         }

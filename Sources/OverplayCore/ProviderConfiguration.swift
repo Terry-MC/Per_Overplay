@@ -147,12 +147,12 @@ public enum GenericHTTPConfigError: Error, Equatable, LocalizedError, Sendable {
 
     public var errorDescription: String? {
         switch self {
-        case .invalidURL: return "只读端点 URL 无效"
-        case .requiresHTTPS: return "通用 HTTP 只接受 HTTPS 端点"
-        case .embeddedCredentials: return "URL 不得包含用户名或密码"
-        case .privateAddress: return "拒绝访问私网地址"
-        case .metadataAddress: return "拒绝访问云元数据地址"
-        case .localhost: return "拒绝访问 localhost / 本机地址"
+        case .invalidURL: return L10n.t("core.genericHTTP.59d2e3c547")
+        case .requiresHTTPS: return L10n.t("core.providerConfig.778f41a924")
+        case .embeddedCredentials: return L10n.t("core.providerConfig.d263318535")
+        case .privateAddress: return L10n.t("core.providerConfig.f81c5b661c")
+        case .metadataAddress: return L10n.t("core.providerConfig.d916dc3b2c")
+        case .localhost: return L10n.t("core.providerConfig.00e7c6ca8d")
         }
     }
 }

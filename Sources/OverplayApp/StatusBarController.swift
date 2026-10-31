@@ -170,6 +170,7 @@ final class StatusBarController: NSObject {
         let refreshItem = menu.addItem(withTitle: L10n.t("common.refreshAll"), action: #selector(refreshAll), keyEquivalent: "")
         refreshItem.target = self
         refreshItem.isEnabled = !model.isDemo && !model.accounts.isEmpty
+        menu.addItem(languageMenuItem())
         menu.addItem(withTitle: L10n.t("statusBar.ff9f5134df"), action: #selector(openSettings), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: L10n.t("statusBar.d94cefe4dc"), action: #selector(quitApp), keyEquivalent: "q").target = self
@@ -178,6 +179,29 @@ final class StatusBarController: NSObject {
             at: NSPoint(x: 0, y: button.bounds.height + 4),
             in: button
         )
+    }
+
+    private func languageMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: L10n.t("settings.language.title"), action: nil, keyEquivalent: "")
+        let submenu = NSMenu(title: L10n.t("settings.language.title"))
+        for language in model.languageOptions {
+            let languageItem = NSMenuItem(
+                title: language.displayName,
+                action: #selector(changeLanguage(_:)),
+                keyEquivalent: ""
+            )
+            languageItem.target = self
+            languageItem.representedObject = language.id
+            languageItem.state = language.id == model.selectedLanguageIdentifier ? .on : .off
+            submenu.addItem(languageItem)
+        }
+        item.submenu = submenu
+        return item
+    }
+
+    @objc private func changeLanguage(_ sender: NSMenuItem) {
+        guard let identifier = sender.representedObject as? String else { return }
+        model.setLanguage(identifier: identifier)
     }
 
     @objc private func openFloatingWindow() {

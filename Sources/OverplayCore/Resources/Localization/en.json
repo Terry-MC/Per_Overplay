@@ -892,5 +892,6 @@
   "alert.metric.consecutiveFailures": "{0} consecutive failures",
   "settings.accounts.title": "Accounts",
   "common.officialName": "Official name: {0}",
-  "common.all": "All"
+  "common.all": "All",
+  "app.notificationsOff": "Notifications are off. Enable local notifications first."
 }

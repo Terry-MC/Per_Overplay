@@ -436,7 +436,7 @@ struct AddProviderView: View {
         return HStack(alignment: .top, spacing: 8) {
             Image(systemName: symbol).foregroundStyle(color)
             VStack(alignment: .leading, spacing: 3) {
-                Text(result.message).font(.callout).textSelection(.enabled)
+                Text(L10n.t(result.message)).font(.callout).textSelection(.enabled)
                 if let capabilities = result.capabilities {
                     Text(L10n.f("addProvider.b288ee97ca", capabilities.summary))
                         .font(.caption)

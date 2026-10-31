@@ -137,8 +137,8 @@ public enum AlertNoticePolicy {
         let style = style(for: alert.kind)
         return ToastMessage(
             id: "alert-\(alert.id)",
-            title: alert.kind.title,
-            message: L10n.f("core.toast.707e98502e", alert.accountName, alert.value, alert.threshold),
+            title: alert.renderedTitle,
+            message: L10n.f("core.toast.707e98502e", alert.accountName, alert.renderedValue, alert.renderedThreshold),
             style: style,
             alertId: alert.id,
             isDemo: alert.isDemo,

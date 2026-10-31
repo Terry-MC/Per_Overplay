@@ -293,18 +293,37 @@ final class DatabaseTests: XCTestCase {
 
     func testSettingsRoundTrip() throws {
         XCTAssertEqual(try store.settings().refreshIntervalMinutes, 15)
+        XCTAssertTrue(try store.settings().notificationsEnabled)
         try store.saveSettings(AppSettings(refreshIntervalMinutes: 30, notificationsEnabled: false))
         let settings = try store.settings()
         XCTAssertEqual(settings.refreshIntervalMinutes, 30)
         XCTAssertFalse(settings.notificationsEnabled)
+        try store.saveSettings(AppSettings(refreshIntervalMinutes: 30, notificationsEnabled: true))
+        XCTAssertTrue(try store.settings().notificationsEnabled)
     }
 
     func testClearAllData() throws {
-        _ = try store.insertTestAccount(provider: .openrouter)
-        try store.saveSettings(AppSettings(refreshIntervalMinutes: 30))
+        let account = try store.insertTestAccount(provider: .openrouter)
+        try store.saveSettings(AppSettings(refreshIntervalMinutes: 30, notificationsEnabled: false))
+        try store.insertAlerts([
+            AlertEvent(
+                accountId: account.id,
+                accountName: account.displayName,
+                kind: .syncFailed,
+                firedAt: TestClock.date(),
+                value: "连续 3 次",
+                threshold: "3 次",
+                metric: "同步失败告警（6 小时冷却）",
+                periodKey: "cooldown"
+            )
+        ])
         try store.clearAllData()
+        let settings = try store.settings()
         XCTAssertEqual(try store.accounts().count, 0)
-        XCTAssertEqual(try store.settings().refreshIntervalMinutes, 15)
+        XCTAssertEqual(settings.refreshIntervalMinutes, 15)
+        XCTAssertTrue(settings.notificationsEnabled)
+        XCTAssertTrue(try store.alerts().isEmpty)
+        XCTAssertTrue(try store.usage(range: DayRange(startDay: "2026-01-01", endDay: "2026-12-31")).isEmpty)
     }
 
 }

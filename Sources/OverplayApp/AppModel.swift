@@ -1536,6 +1536,9 @@ final class AppModel: ObservableObject {
             do {
                 try store.saveSettings(updated)
                 settings = updated
+                if !enabled {
+                    notifications.clearDelivered()
+                }
             } catch {
                 showBanner(L10n.f("app.36652fd1cb", L10n.t(error.localizedDescription)), style: .error)
             }
@@ -1545,6 +1548,10 @@ final class AppModel: ObservableObject {
     func sendTestNotification() {
         if isDemo {
             showBanner(L10n.t("app.c8e02b47fa"), style: .info)
+            return
+        }
+        guard settings.notificationsEnabled else {
+            showBanner(L10n.t("app.notificationsOff"), style: .warning)
             return
         }
         Task {
@@ -1684,9 +1691,13 @@ final class AppModel: ObservableObject {
         localizationRevision = UUID()
         selectedTab = .overview
         selectedCurrency = nil
+        usageAccountFilter = nil
+        usageModelFilter = nil
         overviewPlatformFilter = nil
         overviewAccountFilter = nil
         balanceCurrencyFilter = nil
+        hasUnsavedChanges = false
+        providerFormResetToken = UUID()
         resetToastState()
         syncingAccountIds.removeAll()
         settings = AppSettings()

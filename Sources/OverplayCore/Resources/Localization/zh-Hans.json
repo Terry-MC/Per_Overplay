@@ -892,5 +892,6 @@
   "alert.metric.consecutiveFailures": "连续 {0} 次",
   "settings.accounts.title": "账户",
   "common.officialName": "官方名称：{0}",
-  "common.all": "全部"
+  "common.all": "全部",
+  "app.notificationsOff": "本地通知已关闭，请先开启通知开关"
 }

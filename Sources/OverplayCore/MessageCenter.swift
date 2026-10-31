@@ -166,10 +166,12 @@ public enum MessageCenter {
         let needle = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !needle.isEmpty else { return true }
         return [
-            alert.kind.title,
+            alert.renderedTitle,
             alert.accountName,
             alert.value,
             alert.threshold,
+            alert.renderedValue,
+            alert.renderedThreshold,
             alert.metric,
             AlertMetricText.localized(alert.metric)
         ].contains { $0.localizedCaseInsensitiveContains(needle) }

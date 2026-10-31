@@ -18,6 +18,60 @@ public enum AlertMetricText {
     }
 }
 
+public enum AlertEventText {
+    public static func title(_ event: AlertEvent) -> String {
+        L10n.t("\(event.templateKey).title")
+    }
+
+    public static func value(_ event: AlertEvent) -> String {
+        let raw = event.params["value"] ?? event.value
+        switch event.templateKey {
+        case "alert.syncFailed":
+            if let count = firstInteger(in: raw) {
+                return L10n.f("alert.metric.consecutiveFailures", count)
+            }
+        case "alert.dataStale":
+            if firstInteger(in: raw) == nil {
+                return L10n.t("core.alert.06b221aa39")
+            }
+        default:
+            break
+        }
+        return L10n.t(raw)
+    }
+
+    public static func threshold(_ event: AlertEvent) -> String {
+        let raw = event.params["threshold"] ?? event.threshold
+        switch event.templateKey {
+        case "alert.syncFailed":
+            return L10n.t("core.alert.04b7aad965")
+        case "alert.credentialInvalid":
+            return L10n.t("core.alert.d276c5b08d")
+        case "alert.dataStale":
+            if let minutes = firstInteger(in: raw) {
+                return L10n.f("core.alert.c16d7397ff", minutes)
+            }
+        default:
+            break
+        }
+        return L10n.t(raw)
+    }
+
+    private static func firstInteger(in text: String) -> Int? {
+        guard let regex = try? NSRegularExpression(pattern: "[0-9]+") else { return nil }
+        let range = NSRange(text.startIndex..., in: text)
+        guard let match = regex.firstMatch(in: text, range: range),
+              let capture = Range(match.range, in: text) else { return nil }
+        return Int(text[capture])
+    }
+}
+
+public extension AlertEvent {
+    var renderedTitle: String { AlertEventText.title(self) }
+    var renderedValue: String { AlertEventText.value(self) }
+    var renderedThreshold: String { AlertEventText.threshold(self) }
+}
+
 public enum AppLanguage: String, CaseIterable, Codable, Identifiable, Sendable {
     case system
     case simplifiedChinese = "zh-Hans"
@@ -131,39 +185,39 @@ public enum LanguagePackError: Error, Equatable, LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .fileTooLarge:
-            return "语言包超过 1MB 上限"
+            return L10n.t("languagePack.error.tooLarge")
         case .invalidUTF8:
-            return "语言包不是有效的 UTF-8 文本"
+            return L10n.t("languagePack.error.invalidUTF8")
         case .malformedJSON(let detail):
-            return "语言包 JSON 格式错误：\(detail)"
+            return L10n.f("languagePack.error.malformedJSON", L10n.t(detail))
         case .duplicateKey(let key):
-            return "语言包包含重复 key：\(key)"
+            return L10n.f("languagePack.error.duplicateKey", key)
         case .missingField(let field):
-            return "语言包缺少必填字段：\(field)"
+            return L10n.f("languagePack.error.missingField", field)
         case .invalidField(let field):
-            return "语言包字段类型或内容无效：\(field)"
+            return L10n.f("languagePack.error.invalidField", field)
         case .unsupportedFormatVersion(let version):
-            return "语言包 formatVersion 不受支持：\(version)"
+            return L10n.f("languagePack.error.unsupportedFormatVersion", version)
         case .unsupportedLocale(let locale):
-            return "语言包 locale 不受支持：\(locale)"
+            return L10n.f("languagePack.error.unsupportedLocale", locale)
         case .builtinLocale(let locale):
-            return "内置语言不可被语言包覆盖：\(locale)"
+            return L10n.f("languagePack.error.builtinLocale", locale)
         case .invalidLocale(let locale):
-            return "语言包 locale 不是有效的 BCP-47：\(locale)"
+            return L10n.f("languagePack.error.invalidLocale", locale)
         case .fallbackCycle(let locale):
-            return "语言包回退链存在循环：\(locale)"
+            return L10n.f("languagePack.error.fallbackCycle", locale)
         case .versionRangeInvalid(let range):
-            return "语言包 appVersionRange 无法解析：\(range)"
+            return L10n.f("languagePack.error.versionRangeInvalid", range)
         case .appVersionIncompatible(let range):
-            return "语言包与当前应用版本不兼容：\(range)"
+            return L10n.f("languagePack.error.appVersionIncompatible", range)
         case .nestedValue(let key):
-            return "语言包 strings 只允许扁平字符串：\(key)"
+            return L10n.f("languagePack.error.nestedValue", key)
         case .unsafeContent(let detail):
-            return "语言包包含不安全内容：\(detail)"
+            return L10n.f("languagePack.error.unsafeContent", L10n.t(detail))
         case .placeholderMismatch(let key):
-            return "语言包占位符与内置文案不一致：\(key)"
+            return L10n.f("languagePack.error.placeholderMismatch", key)
         case .storageFailure(let detail):
-            return "语言包保存失败：\(detail)"
+            return L10n.f("languagePack.error.storageFailure", L10n.t(detail))
         }
     }
 }
@@ -408,14 +462,21 @@ public final class LocalizationStore: @unchecked Sendable {
         }
     }
 
-    private func packValueLocked(_ pack: LocalizedLanguagePack, key: String) -> String? {
+    private func packValueLocked(
+        _ pack: LocalizedLanguagePack,
+        key: String,
+        visited: Set<String> = []
+    ) -> String? {
+        guard !visited.contains(pack.locale) else { return nil }
+        var visited = visited
+        visited.insert(pack.locale)
         if let value = pack.strings[key] { return value }
         if let source = builtinCatalogs["zh-Hans"]?[key], let value = pack.strings[source] {
             return value
         }
         if let fallbackKey = fallbackPackLocaleLocked(for: pack),
            let fallback = packsByLocale[fallbackKey] {
-            return packValueLocked(fallback, key: key)
+            return packValueLocked(fallback, key: key, visited: visited)
         }
         return nil
     }
@@ -721,7 +782,10 @@ public final class LocalizationStore: @unchecked Sendable {
         ) else { return }
         for url in urls where url.pathExtension.lowercased() == "json" {
             guard let data = try? Data(contentsOf: url),
-                  let pack = try? Self.decodeStoredPack(data: data) else { continue }
+                  data.count <= LocalizedLanguagePack.maxFileSize,
+                  let pack = try? Self.decodeStoredPack(data: data),
+                  !Self.builtinLocales.contains(pack.locale),
+                  pack.locale == url.deletingPathExtension().lastPathComponent else { continue }
             packsByLocale[pack.locale] = pack
         }
     }

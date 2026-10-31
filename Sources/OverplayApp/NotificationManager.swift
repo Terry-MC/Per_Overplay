@@ -44,8 +44,13 @@ final class NotificationManager: ObservableObject {
     func post(events: [AlertEvent]) async {
         for event in events.prefix(5) {
             _ = await post(
-                title: "\(event.kind.title) · \(event.accountName)",
-                body: L10n.f("notification.1afa529f8c", event.value, event.threshold, AlertMetricText.localized(event.metric))
+                title: "\(event.renderedTitle) · \(event.accountName)",
+                body: L10n.f(
+                    "notification.1afa529f8c",
+                    event.renderedValue,
+                    event.renderedThreshold,
+                    AlertMetricText.localized(event.metric)
+                )
             )
         }
     }

@@ -402,6 +402,9 @@ final class LocalizationTests: XCTestCase {
             for match in pattern.matches(in: text, range: range) {
                 if let keyRange = Range(match.range(at: 1), in: text) {
                     let key = String(text[keyRange])
+                    // Interpolated keys are validated by their concrete catalog
+                    // consumers and dedicated tests, not by a static lookup.
+                    guard !key.contains("\\("), !key.contains("{") else { continue }
                     if !keys.contains(key) { missing.insert(key) }
                 }
             }
@@ -427,6 +430,116 @@ final class LocalizationTests: XCTestCase {
         XCTAssertTrue(store.importedPacks.isEmpty)
         XCTAssertFalse(store.isUsingImportedPack)
         XCTAssertEqual(store.effectiveLocale, AppLanguage.resolveSystem().builtinLocale ?? "zh-Hans")
+    }
+
+    func testRepresentativeErrorsAreLocalized() {
+        let previous = LocalizationStore.shared.language
+        defer { LocalizationStore.shared.setLanguage(previous) }
+        LocalizationStore.shared.setLanguage(.english)
+
+        XCTAssertEqual(
+            AccountValidationError.emptyCredential.errorDescription,
+            "API Key / Management Key cannot be empty"
+        )
+        XCTAssertEqual(
+            GenericHTTPConfigError.requiresHTTPS.errorDescription,
+            "Generic HTTP accepts HTTPS endpoints only"
+        )
+        XCTAssertEqual(
+            LanguagePackError.fileTooLarge.errorDescription,
+            "Language pack exceeds the 1 MB limit"
+        )
+        XCTAssertEqual(
+            LanguagePackError.malformedJSON("根节点必须是对象").errorDescription,
+            "Malformed language pack JSON: root must be an object"
+        )
+        XCTAssertEqual(
+            LanguagePackError.unsafeContent("脚本内容").errorDescription,
+            "Language pack contains unsafe content: script content"
+        )
+        for error in [
+            AccountValidationError.emptyCredential,
+            AccountValidationError.duplicateName,
+            AccountValidationError.missingGenericConfig,
+            AccountValidationError.missingMapping
+        ] {
+            let text = error.errorDescription ?? ""
+            XCTAssertNil(
+                text.range(of: "[\\u4e00-\\u9fff]", options: .regularExpression),
+                "English error still contains Chinese: \(text)"
+            )
+        }
+        for error in [
+            GenericHTTPConfigError.invalidURL,
+            GenericHTTPConfigError.requiresHTTPS,
+            GenericHTTPConfigError.embeddedCredentials,
+            GenericHTTPConfigError.privateAddress,
+            GenericHTTPConfigError.metadataAddress,
+            GenericHTTPConfigError.localhost
+        ] {
+            let text = error.errorDescription ?? ""
+            XCTAssertNil(
+                text.range(of: "[\\u4e00-\\u9fff]", options: .regularExpression),
+                "English error still contains Chinese: \(text)"
+            )
+        }
+
+        LocalizationStore.shared.setLanguage(.traditionalChinese)
+        XCTAssertEqual(
+            AccountValidationError.emptyCredential.errorDescription,
+            "API Key / Management Key 不能為空"
+        )
+    }
+
+    func testAlertEventsUseTemplateKeyAndParamsForTextValues() {
+        let previous = LocalizationStore.shared.language
+        defer { LocalizationStore.shared.setLanguage(previous) }
+        LocalizationStore.shared.setLanguage(.english)
+
+        let now = TestClock.date(2026, 10, 31, 12)
+        let sync = AlertEvent(
+            accountId: "a",
+            accountName: "Account A",
+            kind: .syncFailed,
+            firedAt: now,
+            value: "连续 3 次",
+            threshold: "3 次",
+            metric: "同步失败告警（6 小时冷却）",
+            periodKey: "cooldown"
+        )
+        XCTAssertEqual(sync.templateKey, "alert.syncFailed")
+        XCTAssertEqual(sync.renderedTitle, "Consecutive sync failures")
+        XCTAssertEqual(sync.renderedValue, "3 consecutive failures")
+        XCTAssertEqual(sync.renderedThreshold, "3 times")
+
+        let credential = AlertEvent(
+            accountId: "a",
+            accountName: "Account A",
+            kind: .credentialInvalid,
+            firedAt: now,
+            value: "401 / 403",
+            threshold: "凭据需重新输入",
+            metric: "凭据失效，已暂停自动重试",
+            periodKey: "credential"
+        )
+        XCTAssertEqual(credential.renderedThreshold, "Credential must be re-entered")
+
+        let stale = AlertEvent(
+            accountId: "a",
+            accountName: "Account A",
+            kind: .dataStale,
+            firedAt: now,
+            value: "从未成功同步",
+            threshold: "120 分钟",
+            metric: "超过 2 个刷新周期未成功同步",
+            periodKey: "stale"
+        )
+        XCTAssertEqual(stale.renderedValue, "Never synced successfully")
+        XCTAssertEqual(stale.renderedThreshold, "120 minutes")
+
+        LocalizationStore.shared.setLanguage(.traditionalChinese)
+        XCTAssertEqual(sync.renderedValue, "連續 3 次")
+        XCTAssertEqual(stale.renderedThreshold, "120 分鐘")
     }
 
     func testAlertMetricLocalizationSplitsLineMetric() {

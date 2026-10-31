@@ -63,7 +63,7 @@ struct MenuBarPanelView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .foregroundStyle(.orange)
-                                Text(L10n.f("common.accountAlertLabel", alert.accountName, alert.kind.title))
+                                Text(L10n.f("common.accountAlertLabel", alert.accountName, alert.renderedTitle))
                                     .font(.caption)
                                     .lineLimit(1)
                             }

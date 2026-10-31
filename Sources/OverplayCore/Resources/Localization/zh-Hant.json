@@ -892,5 +892,6 @@
   "alert.metric.consecutiveFailures": "連續 {0} 次",
   "settings.accounts.title": "帳戶",
   "common.officialName": "官方名稱：{0}",
-  "common.all": "全部"
+  "common.all": "全部",
+  "app.notificationsOff": "本機通知已關閉，請先開啟通知開關"
 }
