@@ -86,9 +86,21 @@ open DSOverplay.app        # 启动菜单栏应用
 | --- | --- |
 | ![悬浮窗展开](docs/screenshots/floating-expanded.png) | ![悬浮窗压缩](docs/screenshots/floating-compact.png) |
 
-| 托盘右键菜单（演示标识） | 基础信息（默认页：范围 / 覆盖率 / 厂商卡片） |
+| 托盘右键菜单（演示标识） | 基础信息（简中，默认页） |
 | --- | --- |
 | ![托盘菜单](docs/screenshots/tray-menu.png) | ![基础信息](docs/screenshots/overview.png) |
+
+| 基础信息（English） | 基础信息（繁體中文） |
+| --- | --- |
+| ![English overview](docs/screenshots/overview-en.png) | ![繁體中文 overview](docs/screenshots/overview-hant.png) |
+
+| 设置（简中：语言 / 通知 / 账户） | 设置（English） | 设置（繁體中文） |
+| --- | --- | --- |
+| ![设置简中](docs/screenshots/settings.png) | ![Settings English](docs/screenshots/settings-en.png) | ![設定繁體中文](docs/screenshots/settings-hant.png) |
+
+| 导入日本語语言包（缺失 key 回退简中） | 新增厂商（English，1080 宽布局） |
+| --- | --- |
+| ![日本語语言包](docs/screenshots/settings-ja.png) | ![Add Provider English 1080](docs/screenshots/add-provider-en-1080.png) |
 
 | 新增厂商（必填标识 / 保存原因 / 官方图标） | 告警线编辑器（校验提示 / 演示禁用原因） |
 | --- | --- |

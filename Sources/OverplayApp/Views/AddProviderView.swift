@@ -87,12 +87,21 @@ struct AddProviderView: View {
                 Text(L10n.t("addProvider.0463694499"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                HStack(spacing: 14) {
-                    labeledField(L10n.t("addProvider.915b1d4671"), text: $warningPercent, width: 130, required: true)
-                    labeledField(L10n.t("addProvider.4775c9323b"), text: $criticalPercent, width: 130, required: true)
-                    Spacer()
-                    Button(L10n.t("addProvider.f3b0b7aef7")) { savePublicConfig() }
-                        .disabled(model.isDemo || publicConfigError != nil)
+                    .fixedSize(horizontal: false, vertical: true)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 14) {
+                        labeledField(L10n.t("addProvider.915b1d4671"), text: $warningPercent, width: 150, required: true)
+                        labeledField(L10n.t("addProvider.4775c9323b"), text: $criticalPercent, width: 150, required: true)
+                        Spacer()
+                        Button(L10n.t("addProvider.f3b0b7aef7")) { savePublicConfig() }
+                            .disabled(model.isDemo || publicConfigError != nil)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        labeledField(L10n.t("addProvider.915b1d4671"), text: $warningPercent, width: 150, required: true)
+                        labeledField(L10n.t("addProvider.4775c9323b"), text: $criticalPercent, width: 150, required: true)
+                        Button(L10n.t("addProvider.f3b0b7aef7")) { savePublicConfig() }
+                            .disabled(model.isDemo || publicConfigError != nil)
+                    }
                 }
                 if let publicConfigError {
                     Label(publicConfigError, systemImage: "exclamationmark.circle")
@@ -127,6 +136,7 @@ struct AddProviderView: View {
                 Text(L10n.t("addProvider.c640421fd7"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 14) {
                     labeledField(L10n.t("addProvider.8e759b9280"), text: $displayName, width: 220)
@@ -181,6 +191,7 @@ struct AddProviderView: View {
                     Text(L10n.t("addProvider.1801f70f4e"))
                         .font(.caption2)
                         .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if provider == .genericHTTP {
@@ -199,6 +210,7 @@ struct AddProviderView: View {
                 Text(L10n.t("addProvider.937391fd7d"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let reason = saveDisabledReason, !isSaving {
                     Label(reason, systemImage: "info.circle")
                         .font(.caption)
@@ -216,23 +228,26 @@ struct AddProviderView: View {
                         }
                     }
                 }
-                HStack {
+                VStack(alignment: .leading, spacing: 8) {
                     Text(L10n.t("addProvider.5af73c60a1"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                    Spacer()
-                    if editingAccount != nil {
-                        Button(L10n.t("addProvider.c698df948d")) { resetForm() }
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack {
+                        Spacer()
+                        if editingAccount != nil {
+                            Button(L10n.t("addProvider.c698df948d")) { resetForm() }
+                        }
+                        Button(L10n.t("addProvider.84fcd70d42")) { resetForm() }
+                        Button {
+                            save()
+                        } label: {
+                            if isSaving { ProgressView().controlSize(.small) }
+                            Text(editingAccount == nil ? L10n.t("addProvider.2e1d532a2e") : L10n.t("addProvider.60b4ae9082"))
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(saveDisabledReason != nil || isSaving)
                     }
-                    Button(L10n.t("addProvider.84fcd70d42")) { resetForm() }
-                    Button {
-                        save()
-                    } label: {
-                        if isSaving { ProgressView().controlSize(.small) }
-                        Text(editingAccount == nil ? L10n.t("addProvider.2e1d532a2e") : L10n.t("addProvider.60b4ae9082"))
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(saveDisabledReason != nil || isSaving)
                 }
             }
         }
@@ -294,19 +309,9 @@ struct AddProviderView: View {
                 Text(L10n.t("addProvider.e6733b3e08")).font(.headline)
                 Text(L10n.t("addProvider.4b7a9ed7f8")).font(.caption).foregroundStyle(.secondary)
             }
-            HStack(alignment: .top, spacing: 20) {
-                AlertLineRuleEditor(
-                    title: L10n.t("addProvider.35f0803018"),
-                    rule: $warningRule,
-                    valueText: $warningValue,
-                    currency: $warningCurrency
-                )
-                AlertLineRuleEditor(
-                    title: L10n.t("addProvider.8d56556021"),
-                    rule: $criticalRule,
-                    valueText: $criticalValue,
-                    currency: $criticalCurrency
-                )
+            VStack(alignment: .leading, spacing: 12) {
+                warningEditor
+                criticalEditor
             }
             if let error = alertConfigError() {
                 Label(error, systemImage: "exclamationmark.circle")
@@ -314,6 +319,24 @@ struct AddProviderView: View {
                     .foregroundStyle(.red)
             }
         }
+    }
+
+    private var warningEditor: some View {
+        AlertLineRuleEditor(
+            title: L10n.t("addProvider.35f0803018"),
+            rule: $warningRule,
+            valueText: $warningValue,
+            currency: $warningCurrency
+        )
+    }
+
+    private var criticalEditor: some View {
+        AlertLineRuleEditor(
+            title: L10n.t("addProvider.8d56556021"),
+            rule: $criticalRule,
+            valueText: $criticalValue,
+            currency: $criticalCurrency
+        )
     }
 
     private func mappingField(_ title: String, text: Binding<String>) -> some View {
@@ -366,7 +389,7 @@ struct AddProviderView: View {
                                 Text(
                                     [
                                         account.provider.displayName,
-                                        account.officialName.map { L10n.f("settings.cf2ff9d62a", $0) },
+                                        account.officialName.map { L10n.f("common.officialName", $0) },
                                         account.capabilities.summary
                                     ].compactMap { $0 }.joined(separator: " · ")
                                 )
@@ -840,11 +863,13 @@ struct AlertLineRuleEditor: View {
                     Text(L10n.t("addProvider.97242298d6"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Text(sourceHint)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

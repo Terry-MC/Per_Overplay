@@ -137,7 +137,7 @@ struct SettingsView: View {
                     ) {
                         Text(L10n.f("settings.eb7fa47f34", model.settings.refreshIntervalMinutes))
                             .monospacedDigit()
-                            .frame(width: 96, alignment: .trailing)
+                            .frame(width: 160, alignment: .trailing)
                     }
                     .disabled(model.isDemo)
                 }
@@ -192,7 +192,7 @@ struct SettingsView: View {
 
     private var accountsSection: some View {
         SectionCard(
-            title: L10n.t("core.csv.c3d92b20c8"),
+            title: L10n.t("settings.accounts.title"),
             subtitle: L10n.f("settings.3c12d9513d", model.accounts.count),
             isDemo: model.isDemo
         ) {
@@ -213,7 +213,7 @@ struct SettingsView: View {
                                 Text(
                                     [
                                         account.provider.displayName,
-                                        account.officialName.map { L10n.f("settings.cf2ff9d62a", $0) },
+                                        account.officialName.map { L10n.f("common.officialName", $0) },
                                         model.currencyLabel(for: account),
                                         model.capabilitySummary(for: account)
                                     ].compactMap { $0 }.joined(separator: " · ")

@@ -11,6 +11,7 @@ struct LaunchOptions {
     var snapshotPath: String?
     var snapshotDirectory: String?
     var dataDirectory: URL?
+    var languageIdentifier: String?
     var overviewPlatform: ProviderKind?
     var overviewAccount: String?
     var windowWidth: CGFloat?
@@ -69,6 +70,9 @@ struct LaunchOptions {
                 if let height = Double(arguments[index]) {
                     options.windowHeight = CGFloat(height)
                 }
+            case "--language" where index + 1 < arguments.count:
+                index += 1
+                options.languageIdentifier = arguments[index]
             case "--dark":
                 options.darkAppearance = true
             case "--ui-smoke":
@@ -141,6 +145,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         model = AppModel(dataDirectory: options.dataDirectory, forceDemo: options.demo)
+        if let language = options.languageIdentifier {
+            model.setLanguage(identifier: language)
+        }
         if options.suppressToasts {
             model.dismissAllToasts()
         }

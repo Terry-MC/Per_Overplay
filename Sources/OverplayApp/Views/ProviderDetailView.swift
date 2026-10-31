@@ -79,7 +79,7 @@ struct ProviderDetailView: View {
                 Text(
                     [
                         account.provider.displayName,
-                        account.officialName.map { L10n.f("settings.cf2ff9d62a", $0) },
+                        account.officialName.map { L10n.f("common.officialName", $0) },
                         model.capabilitySummary(for: account)
                     ].compactMap { $0 }.joined(separator: " · ")
                 )

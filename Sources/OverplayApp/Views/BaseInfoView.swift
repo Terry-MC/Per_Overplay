@@ -172,7 +172,7 @@ struct BaseInfoView: View {
         }
         return VStack(alignment: .leading, spacing: 6) {
             FlowLayout(spacing: 6, lineSpacing: 6) {
-                platformButton(nil, title: "All", symbol: "square.grid.2x2")
+                platformButton(nil, title: L10n.t("common.all"), symbol: "square.grid.2x2")
                 ForEach(presentProviders) { provider in
                     platformButton(for: provider)
                 }
@@ -380,7 +380,7 @@ private struct ProviderOverviewCard: View {
     private var subtitle: String {
         [
             account.provider.displayName,
-            account.officialName.map { L10n.f("settings.cf2ff9d62a", $0) },
+            account.officialName.map { L10n.f("common.officialName", $0) },
             model.currencyLabel(for: account),
             account.capabilities.summary
         ].compactMap { $0 }.joined(separator: " · ")

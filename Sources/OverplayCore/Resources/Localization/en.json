@@ -889,5 +889,8 @@
   "common.listSeparator": "; ",
   "common.labeledReason": "{0}: {1}",
   "languagePack.error.rootObject": "root must be an object",
-  "alert.metric.consecutiveFailures": "{0} consecutive failures"
+  "alert.metric.consecutiveFailures": "{0} consecutive failures",
+  "settings.accounts.title": "Accounts",
+  "common.officialName": "Official name: {0}",
+  "common.all": "All"
 }

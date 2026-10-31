@@ -889,5 +889,8 @@
   "common.listSeparator": "；",
   "common.labeledReason": "{0}：{1}",
   "languagePack.error.rootObject": "根节点必须是对象",
-  "alert.metric.consecutiveFailures": "连续 {0} 次"
+  "alert.metric.consecutiveFailures": "连续 {0} 次",
+  "settings.accounts.title": "账户",
+  "common.officialName": "官方名称：{0}",
+  "common.all": "全部"
 }
